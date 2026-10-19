@@ -39,6 +39,23 @@ The full user manual is in [`docs/MANUAL.txt`](docs/MANUAL.txt).
 
 If saving reports "access denied", run it as administrator.
 
+## Switching play spaces without the headset
+
+Every space you save in VR (Menu → Saved Spaces → Save As New) can also be applied from
+Windows. ZoneTweak doesn't start VR in that case: it writes that space's boundary into the
+Pimax files and offers to restart Pimax so the new boundary loads.
+
+1. In VR, save your spaces, for example `Door open` and `Door closed`.
+2. Right-click `ZoneTweak.exe` → Create shortcut.
+3. Right-click the shortcut → Properties, and add `--use` plus the space name to **Target**:
+   ```
+   "C:\Games\ZoneTweak\ZoneTweak.exe" --use Door open
+   ```
+4. Name the shortcut after the space, and make one shortcut per space.
+
+Double-click a shortcut to switch. If the name doesn't match a saved space, it lists the
+spaces you have.
+
 ## Building
 
 Go 1.24+, standard library only (no cgo). It builds on any OS for Windows x64:
