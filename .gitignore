@@ -1,0 +1,8 @@
+# build output
+/ZoneTweak.exe
+/ZoneTweak.zip
+/dist/
+*.log
+
+# personal Lighthouse / boundary captures used by local tests (never published)
+/testdata/

@@ -1,0 +1,199 @@
+ZONETWEAK — for Pimax Lighthouse
+In-headset editor for the Pimax safety zone (green boundary) (C:\ProgramData\Pimax\runtime\chaperone_info*.vrchap).
+Runs on OpenXR, so Pimax must be the active OpenXR runtime (it is when you use Pimax Play / Evo).
+
+RUN
+  Start Pimax Play / Evo with the headset on, then run ZoneTweak.exe once from Windows.
+  The first run adds ZoneTweak to Pimax's app library, so after that you can launch it
+  from inside VR like any other Pimax app.
+  Keep openxr_loader.dll next to it. A desktop window mirrors the left eye.
+  Problems go to zonetweak.log in this folder.
+
+CONTROLS (either hand)
+  Trackpad press (Index) ....... switch tool: FLOOR beam <-> LASER pointer (with transform)
+    (Touch: squeeze; Vive: use the POINTER menu button)
+  Trigger near a generator ..... lock the tractor beam on it and move it
+    (in FLOOR mode it grabs anything within ~45 cm, no need to stand on it;
+     in LASER mode aim anywhere on the shaft, top to bottom, and drag it at that distance)
+  Trigger near a wall .......... drop a new generator there and move it
+  A on a point ................. delete it
+  Thumbstick click ............. undo
+  B ............................ open / close the menu
+  Menu: point the controller tip into a button and pull the trigger.
+  The beam's floor ring is where it acts; the faint big ring is the grab range.
+
+NEW OUTLINE (menu)
+  Walk to each real corner, hold the controller over it, pull the trigger.
+  Pull the trigger near the first corner to close. A removes the last corner,
+  thumbstick click cancels.
+
+MENU
+  Point at any button (tip or laser) and a description appears right beside it.
+  SAVE ........... writes the boundary into the Pimax files and SteamVR's copies of the same
+                   universe (so a Pimax resync can't bring the old one back). The first save
+                   keeps a timestamped .bak of each file. Restart Pimax to see the new border.
+                   If it says access denied, run the exe as administrator.
+  REVERT ......... back to the last saved boundary.
+  SQUARE UP ...... straight walls at right angles, lined up with the room.
+  SIMPLIFY ....... merges points within 8 cm of a straight line.
+  SNAP ........... off by default. On, dragged points pull square to their neighbors.
+  SAVED SPACES ... your named play spaces (see below).
+  FIX FLOOR ...... if ZoneTweak's grid isn't on your real floor (Pimax sometimes starts
+                   the app with the floor offset), press it, rest a controller on the
+                   floor during the 3 s countdown. View only, nothing is saved.
+  POINTER ........ same as the trackpad press.
+                   FLOOR = beam straight down (default). LASER = a pointing beam. Either way
+                   only one hand is active: the one that pulled the trigger last (pull the
+                   other trigger to swap; it won't swap while you're holding a generator).
+                   Point it at the menu to select buttons. Good for points behind a wall.
+                   The laser is smoothed (One Euro filter): slow, careful moves are steady
+                   even with a shaky hand, fast moves still follow quickly.
+  PLAY AREA ...... on the floor next to the yellow play center there's a padlock. Point at
+                   it and pull the trigger to unlock. Then, on the floor:
+                   yellow center post = move, curved yellow arrows = drag around to turn,
+                   blue edge / corner posts = stretch. Click the padlock again to lock.
+                   With it unlocked, the menu shows FIT AREA, CENTER IN ROOM,
+                   SQUARE TO ROOM and RESET. Then SAVE.
+  ZONE SETTINGS .. how close you get before the safety zone appears (warning distance),
+                   in 2 cm / 10 cm steps or back to Pimax's default, and the safety zone
+                   on/off switch. Writes %LOCALAPPDATA%\Pimax\runtime\profile.json
+                   (backed up first). Restart Pimax if it doesn't change right away.
+                   PROXIMITY TEST shows the warning distance as an orange line inside
+                   the walls. Drag the line with the trigger to set the distance
+                   (saved when you let go). Walk or reach past it and the walls glow red:
+                   that's where Pimax's safety zone would pop up.
+  REALIGN VIEW ... if the green walls don't line up with your room (for example after a
+                   Pimax recenter done before ZoneTweak started), turn this on, hold the
+                   trigger and drag / twist the whole outline until it sits on Pimax's own
+                   green border or your real walls. Stick click resets. Only changes the
+                   view, never the saved boundary. A recenter done while ZoneTweak is
+                   running is corrected automatically.
+  RESTORE ORIGINAL loads the boundary from the oldest backup (Pimax's own, before any edit
+                   from this app). Save to write it back.
+  B closes the menu.
+
+SAVED SPACES
+  SAVE AS NEW .... name what you see now with the on-panel keyboard.
+  Tap a space .... loads it AND writes it to Pimax in one step. It becomes the active space.
+  UPDATE ......... overwrite the active space with what you see now.
+  DELETE ......... press twice.
+  Spaces live as JSON files in the "spaces" folder next to the exe.
+
+SWITCH WITHOUT PUTTING THE HEADSET ON
+  ZoneTweak.exe --use Door open
+  Make a desktop shortcut per space (Target: "...\ZoneTweak.exe" --use Door open),
+  run it, and it offers to restart Pimax for you.
+
+EXIT / RESTART
+  SAVE & RESTART PIMAX saves, closes ZoneTweak and restarts the Pimax service (the same
+  thing Pimax Play's "Restart service" does) so the new boundary loads.
+  EXIT: if you saved anything, a popup offers to restart Pimax for you.
+  Zone Settings changes (warning distance, zone on/off, recenter) are also sent to Pimax
+  live through its own service, so they may apply without a restart.
+
+UNDO A SAVE
+  Close Pimax, delete the edited .vrchap and rename its .bak-YYYYMMDD-HHMMSS copy back.
+
+THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
+  GRAPHICS
+    Real-time shader renderer: physically based materials (painted steel with chips and
+    rust, brushed chrome, rubber, circuit boards with blinking LEDs, hazard paint, riveted
+    wall panels), steel deck floor with standing water that mirrors the room, two ceiling
+    lamps with real shadows (one has a fan turning under it), volumetric fog that lights
+    up around the lasers and lamps, HDR bloom and filmic tone mapping. Touch a laser wall
+    and the sheet reacts: shock rings ripple out, the filaments flare white and arcs crawl
+    across it; with the pointer, the hit point drags a flickering trail of interference -
+    jittering horizontal scanlines salted with harsh TV-static pixels that hang on a
+    moment longer - they never fade, they just turn up less and less until they're gone - with lone stray lines thrown out further away - across the sheet. The laser pointer reaches as far as
+    the room, at any height. The haze is thin
+    overall, with curling vapour pooling round the generators, slow drifting banks of mist in
+    the hall, and steam rolling out of the doorways the robots use. Smoke and steam are lit by
+    the lasers and lamps around them.
+    Menu > GRAPHICS opens a page where you pick ULTRA, HIGH, MEDIUM, LOW or POTATO directly. It
+    switches instantly (a brief flicker while it rebuilds) and is remembered. ULTRA is the
+    default (8x anti-aliasing, 4K shadows, full fog). If the headset stutters, try HIGH; LOW
+    also turns off the floor reflections and uses fewer lights. POTATO is the bare minimum for
+    weak GPUs: no anti-aliasing, no shadows, plain floor (no water), no surface detail, no
+    mist or haze patches, very few lights and particles.
+  LASER WALLS
+    Faint energy sheets with uneven filaments, occasional brown-outs, and rare random
+    overcharge surges (roughly once a minute per wall): a flare at the base, then a bolt
+    that accelerates across the wall with a real arc crackle and hits the far generator.
+  GENERATORS
+    The laser sheet is only projected by each post's energy blade - not the bell cap on top
+    and not the base machinery. Below the blade, two diagonal box-section emitters telescope
+    out of every generator, angled over its base to just above the deck; the sheet comes out
+    of a glowing trench along their top, so it still reaches the floor. They retract into the post when it's torn free or still deploying, and extend
+    again once it's planted. Hot points glow along each blade, jetting energy into the sheet,
+    and the sheet's edges leave through glowing lenses set in finned emitter heads: one under
+    the bell for the top edge, one low on the post for the bottom edge. When the floor
+    telescope extends it pushes the bottom lens out with it, so the bottom edge always
+    comes out of the lens - at the head when stowed, at the telescope tip on the floor.
+    Every base carries four hydraulic legs and two tethers, each in its own slot. When a
+    joined neighbour moves, a base turns smoothly to its new heading and any leg or tether
+    near the neighbour tucks in toward the shaft - nothing vanishes or jumps. A torn-off
+    base (and every piece it's cut into) keeps the same layout.
+    Placing a corner fires a capsule that lands, pulses, telescopes up, flickers and lights.
+    A new generator dragged out of a wall hovers until you let go; only then does it grow
+    its floor mount.
+    Each sits on a slide-mount base: you can nudge it a little, and if you let go it stays
+    where you left it, off-centre on the base. The shaft only travels on the smooth centre
+    of the mount: its tethers draw in and go tight as it moves, and at ~11 cm the mount
+    bottoms out and holds, the cables humming and sparking; keep pulling another ~11 cm (the controller buzzes harder as it strains) and the shaft
+    snaps free with a hard jolt. It floats while you hold it and grows a new base where you
+    drop it. Drop it back on its old base (within ~20 cm of the centre) and it re-docks:
+    pistons and cables reach up and lock on, leaving it off-centre where it landed. Drop it
+    close enough that the new base would overlap the old one, and the new base shears that
+    section off: the chunks fly, land, and a Scuttler collects them one at a time before the
+    rest of the old base is cut up and removed. Generators close enough for their bases to overlap share one joint
+    base (double or triple), which forges itself under them: welding arcs trace its outline,
+    the slab swells up glowing hot, steams as it cools and the legs re-route onto it. Pull
+    them apart and it retracts. Each can still slide on its own mount and rips off the same way.
+    Rip one off a shared base and its torn stump stays part of the slab until a robot starts
+    cutting it free; the seam flashes as it separates. A new base planted over several old
+    ones shears a chunk out of each of them.
+  SALVAGE
+    A robot comes for every ripped-off base. Out in the open a big one does it: a Warden
+    crouches and runs a circular saw round the rim, or a Tread cuts it with a laser; then it
+    grips the base (the Warden with both hands, the Tread with hydraulic clamp arms on its
+    bow) and carries it out a doorway in one piece, backing out first so the load never
+    swings into a generator. If a big robot
+    can't get there without brushing a generator, a small Scuttler comes instead, plasma-
+    cuts the base into three pieces, lifts each onto its cargo bed with an electromagnet arm
+    and carries them out one per trip. The base smokes,
+    more while it's being cut. Cutters unfold before they bite and fold away after, and every
+    arm eases between poses (cut, grab, lift, carry) - nothing snaps into place. Robots
+    switch off any laser wall they have to pass through.
+  ROBOTS
+    Wardens (biped, welding torch + claw), Treads (tracked, turret head, welder arm) and
+    Scuttlers (small four-wheeled salvage rovers with a plasma cutter and a cargo bed).
+    Every robot is different: new and clean, polished chrome, or old and rusted (old ones
+    spark at the joints and their eyes flicker). They fix faulty generators, patrol, stop to
+    talk to each other in their own language, and sometimes scan you. When you move a
+    generator they scatter out of the way. If two meet head-on and can't get past, the one
+    with the less important job steps aside and lets the other through. A robot that gets
+    wedged against a wall or generator backs off, turns round and goes another way. Walls cut out briefly if a robot gets too close,
+    so they never touch the lasers, and they keep their shoulders and arms well clear of the
+    walls and generators as they walk past. When a wall is powered down, its blade hot
+    points and the floor emitters' jets go dark with it.
+  INCIDENT (once per launch)
+    Somewhere between 3 and 10 minutes in, one of the wall junction boxes starts sparking. A
+    minute later it blows: debris flies, it catches fire and the alarm sounds with red
+    beacons spinning overhead. The fire comes in bursts: it dies back under thick black
+    smoke, then flares up again a few times, throwing flames and debris. A Warden and a
+    Tread run in, unhook their CO2 bottles and take the horns off them (the Warden carries
+    its bottle in its claw, the Tread's stays on its hull on a hose), and fight it in bursts:
+    a blast of swirling white gas that boils over the fire and fans out across the wall,
+    a pause while the flames claw their way back, another blast - until the last one puts
+    it out. Then they stow the extinguishers, walk over, unfold their cutting and welding
+    heads, weld the box back together, fold the tools away, look it over and leave, and a Scuttler clears the debris. It only ever happens
+    once per run.
+  BASE STATIONS
+    Your real base stations, hung from the ceiling on bio-mechanical arms, read from
+    Pimax's lighthouse database. Every 20-60 s one fires a barcode scan sweep.
+  SOUND
+    Industrial horror bed (sub rumble, groaning metal, distant clangs, steam, drips, far-off
+    robot chatter) in a large reverberant hall; transformer hum near the walls; modal metal
+    impacts, hydraulics, servos, grinding, arc welding, tearing metal. Distant sounds are
+    duller and wetter, and everything is panned to where it happens.
+  If you hear nothing, check Windows' default playback device is the headset.
