@@ -979,6 +979,7 @@ func (e *editor) handleHand(h *hand) {
 		}
 		e.push()
 		e.releaseAll()
+		e.startRemoval(h.hoverV)
 		e.pts = append(e.pts[:h.hoverV], e.pts[h.hoverV+1:]...)
 		e.theta = domAngle(e.pts)
 		haptic(h.idx, 2500)
@@ -1199,6 +1200,8 @@ func (e *editor) buildScene() {
 			}
 			e.drawGen(i, p, e.height, e.pts[(i-1+n)%n], e.pts[(i+1)%n], hotV[i], e.wallTint(level, false), genFault[i])
 		}
+		e.updateRemovals()
+		e.drawRemovals(e.wallTint(level, false))
 		e.drawOldBases()
 		e.updateFire(frameDT)
 		e.drawFire()

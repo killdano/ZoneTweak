@@ -569,6 +569,7 @@ func (e *editor) handleRayGen(h *hand) bool {
 		}
 		e.push()
 		e.releaseAll()
+		e.startRemoval(gi)
 		e.pts = append(e.pts[:gi], e.pts[gi+1:]...)
 		e.theta = domAngle(e.pts)
 		haptic(h.idx, 2500)

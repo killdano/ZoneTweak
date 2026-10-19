@@ -777,7 +777,7 @@ func (e *editor) drawOldBases() {
 			if ob.debris {
 				if ob.pieces[0] == 0 {
 					c, x, y, z := debrisFrame(ob)
-					drawChunk(ob.shape, c, x, y, z)
+					drawDebris(ob, c, x, y, z)
 					if ob.landed {
 						shadowBlob(ob.pos, 0.14, 0.4)
 					}
@@ -859,7 +859,7 @@ func (e *editor) drawCarriedPiece(r *robot, bed vec3, f vec3) {
 	c, ax, _ := pieceAt(r, bed, f)
 	if r.salv.debris {
 		_, az := baseFrame(ax)
-		drawChunk(r.salv.shape, c, ax, v3(0, 1, 0), az)
+		drawDebris(r.salv, c, ax, v3(0, 1, 0), az)
 	} else {
 		pieceBite = r.salv.bites
 		genPiece(c, ax, r.svPiece)

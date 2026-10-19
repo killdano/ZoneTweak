@@ -184,6 +184,7 @@ Surf material(int kind, vec3 P, vec3 N, vec3 t, vec3 base, float metal, float ro
 }
 
 void main() {
+    if (v_pos.y < -0.01) discard; // nothing exists under the deck (things sinking into the floor, and their reflections)
     if (v_mat.w > 0.0 || dot(v_nrm, v_nrm) < 0.01) {
         vec3 c = toLinear(v_col.rgb) * max(v_mat.w, 1.0) * u_emisGain;
         o_col = vec4(c, u_alphaMode > 0.5 ? v_col.a : 1.0);

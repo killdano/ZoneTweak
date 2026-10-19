@@ -134,6 +134,13 @@ THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
     near the neighbour tucks in toward the shaft - nothing vanishes or jumps. A torn-off
     base (and every piece it's cut into) keeps the same layout.
     Placing a corner fires a capsule that lands, pulses, telescopes up, flickers and lights.
+    Deleting one changes the boundary at once, and the old post leaves in one of four ways,
+    picked at random: it DECOMMISSIONS (beacon goes red, its walls unzip back into the
+    neighbours, the shaft telescopes down and sinks into its base), gets EXTRACTED (a claw
+    drops from the ceiling, clamps it and rips it out through the roof), drops through a
+    HATCH (the deck opens, it sinks into the dark and the doors slam shut), or OVERLOADS
+    (arcs crawl up it, the bell blows off and the shaft crumples). Whatever base or debris
+    is left behind gets salvaged by the robots. Undo brings it straight back.
     A new generator dragged out of a wall hovers until you let go; only then does it grow
     its floor mount.
     Each sits on a slide-mount base: you can nudge it a little, and if you let go it stays

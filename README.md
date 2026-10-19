@@ -22,6 +22,8 @@ It runs on **OpenXR**, so it works with whichever OpenXR runtime is active: Pima
 - **Safe saving**: timestamped `.bak` copies before the first write, a Revert option, Restore
   Original, and Save & Restart Pimax.
 - **Shows your real base stations** from the Lighthouse database.
+- **Deleting a post** plays one of four random exits (decommission, ceiling extraction,
+  floor hatch, overload) while the boundary updates instantly.
 - **Set dressing (visual only)**: the boundary is drawn as laser walls between generator
   posts in a grim industrial prison, with robots that repair, salvage and fight the
   occasional fire. All procedural, with a fully synthesized sound engine. None of it is

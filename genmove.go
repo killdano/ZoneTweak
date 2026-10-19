@@ -53,6 +53,7 @@ type oldBase struct {
 	liftYaw     float64
 	cutSpan     float64
 	fireDebris  bool
+	bell        bool // a blown-off generator bell cap rather than a slab chunk
 }
 
 type regrow struct {

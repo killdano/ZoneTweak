@@ -326,6 +326,21 @@ func rotAbout(v, k vec3, a float64) vec3 {
 	return v.mul(c).add(k.cross(v).mul(s)).add(k.mul(k.dot(v) * (1 - c)))
 }
 
+// drawDebris: a loose piece - a jagged slab chunk, or a blown-off bell cap lying on its side
+func drawDebris(ob *oldBase, c, x, y, z vec3) {
+	if !ob.bell {
+		drawChunk(ob.shape, c, x, y, z)
+		return
+	}
+	defer withTex(xf{c, x, y, z})()
+	m := c.add(y.mul(0.072))
+	useMat(material{0, 0.3, 0.45, 0.45})
+	cyl(&bEnv, m.sub(x.mul(0.07)), m.add(x.mul(0.07)), 0.072, 0.072, 20, rgba{0.4, 0.32, 0.09, 1}, false)
+	hemi(&bEnv, m.add(x.mul(0.07)), x, 0.072, rgba{0.4, 0.32, 0.09, 1}, 4, 20)
+	useMat(mCast)
+	cyl(&bEnv, m.sub(x.mul(0.07)), m.sub(x.mul(0.085)), 0.072, 0.06, 20, rgba{0.05, 0.05, 0.05, 1}, true) // scorched, torn rim
+}
+
 // drawChunk: an extruded jagged slab of base plate, shape in its own (x,z) plane
 func drawChunk(shape []pt2, c, x, y, z vec3) {
 	const h = 0.028

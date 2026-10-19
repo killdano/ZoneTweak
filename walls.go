@@ -639,6 +639,9 @@ func (e *editor) surges(i int, a, b pt2, L, H float64, col rgba, pulse, fault fl
 	wallSurges[i] = live
 }
 
+// shaftNoCap: draw the shaft with its bell blown off
+var shaftNoCap bool
+
 func genShaftGeom(p pt2, H float64, prev, next pt2, lift float64) {
 	c := fl(p, lift)
 	defer withTex(xf{c, v3(1, 0, 0), v3(0, 1, 0), v3(0, 0, 1)})()
@@ -676,11 +679,17 @@ func genShaftGeom(p pt2, H float64, prev, next pt2, lift float64) {
 		useMat(mCast)
 	}
 	cyl(&bEnv, c.add(up.mul(H-0.24)), c.add(up.mul(H-0.2)), 0.06, 0.072, 28, cIron, false)
-	useMat(material{0, 0.3, 0.45, 0.45})
-	cyl(&bEnv, c.add(up.mul(H-0.2)), c.add(up.mul(H-0.02)), 0.072, 0.072, 28, rgba{0.55, 0.45, 0.12, 1}, false)
-	hemi(&bEnv, c.add(up.mul(H-0.02)), up, 0.072, rgba{0.55, 0.45, 0.12, 1}, 6, 28)
-	useMat(mSteel)
-	cyl(&bEnv, c.add(up.mul(H+0.04)), c.add(up.mul(H+0.12)), 0.012, 0.008, 10, cSteelEnv, true)
+	if !shaftNoCap {
+		useMat(material{0, 0.3, 0.45, 0.45})
+		cyl(&bEnv, c.add(up.mul(H-0.2)), c.add(up.mul(H-0.02)), 0.072, 0.072, 28, rgba{0.55, 0.45, 0.12, 1}, false)
+		hemi(&bEnv, c.add(up.mul(H-0.02)), up, 0.072, rgba{0.55, 0.45, 0.12, 1}, 6, 28)
+		useMat(mSteel)
+		cyl(&bEnv, c.add(up.mul(H+0.04)), c.add(up.mul(H+0.12)), 0.012, 0.008, 10, cSteelEnv, true)
+	} else {
+		// blown open: a scorched, jagged stump where the bell was
+		useMat(mCast)
+		cyl(&bEnv, c.add(up.mul(H-0.2)), c.add(up.mul(H-0.16)), 0.072, 0.07, 28, rgba{0.05, 0.045, 0.04, 1}, true)
+	}
 	for _, nb := range []pt2{prev, next} {
 		dx, dz := nb[0]-p[0], nb[1]-p[1]
 		l := math.Hypot(dx, dz)
