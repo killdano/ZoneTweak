@@ -46,7 +46,7 @@ type role struct {
 
 var (
 	roles  []role
-	segMul = 1
+	segMul = 1.0 // tessellation scale for cylinders/spheres (level of detail)
 )
 
 func (b *batch) vertL(p, n vec3, c rgba) {
@@ -83,8 +83,19 @@ var primCounter float64
 // frame to frame (otherwise rust/scratches would re-randomise every frame)
 func seedTex(x float64) { primCounter = math.Floor(x) }
 
+// stableTex: texture offsets come from where a part is, not how many parts came before it,
+// so rebuilding the cell leaves untouched parts looking exactly the same
+var stableTex bool
+
 func nextTexOff() {
 	primCounter++
-	h := math.Mod(math.Sin(primCounter*12.9898)*43758.5453, 1)
-	texOff = vec3{h * 31, math.Mod(h*7.13, 1) * 29, math.Mod(h*3.71, 1) * 37}
+	seed := primCounter
+	if stableTex {
+		o := texF.o
+		seed = math.Floor(o.x*173.3) + math.Floor(o.y*91.7)*1.37 + math.Floor(o.z*137.1)*2.11
+	}
+	v := math.Sin(seed*12.9898) * 43758.5453
+	h := v - math.Floor(v)
+	f1, f2 := h*7.13, h*3.71
+	texOff = vec3{h * 31, (f1 - math.Floor(f1)) * 29, (f2 - math.Floor(f2)) * 37}
 }

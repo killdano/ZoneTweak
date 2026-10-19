@@ -172,7 +172,11 @@ func cyl(b *batch, a, c vec3, r0, r1 float64, segs int, col rgba, caps bool) {
 	z := d.mul(1 / L)
 	x, y := basis(z)
 	defer withTex(xf{a, x, y, z})()
-	segs *= segMul
+	if math.Max(r0, r1) < 0.015 {
+		segs = min(segs, lodSegs(segs)) // tiny parts never get extra facets
+	} else {
+		segs = lodSegs(segs)
+	}
 	slope := (r0 - r1) / L
 	tb := trig(segs)
 	for i := 0; i < segs; i++ {
@@ -187,17 +191,52 @@ func cyl(b *batch, a, c vec3, r0, r1 float64, segs int, col rgba, caps bool) {
 	}
 }
 
+// lodSegs: scale a tessellation count by the current level of detail
+func lodSegs(n int) int {
+	if segMul == 1 {
+		return n
+	}
+	m := int(math.Round(float64(n) * segMul))
+	if m < 3 {
+		m = 3
+	}
+	return m
+}
+
+// unit sphere / hemisphere direction grids, computed once per tessellation
+var sphTabs = map[[3]int][]vec3{}
+
+func sphTab(lat, lon int, hemi bool) []vec3 {
+	k := [3]int{lat, lon, 0}
+	if hemi {
+		k[2] = 1
+	}
+	if t, ok := sphTabs[k]; ok {
+		return t
+	}
+	t := make([]vec3, (lat+1)*(lon+1))
+	for i := 0; i <= lat; i++ {
+		a := math.Pi * (float64(i)/float64(lat) - 0.5)
+		if hemi {
+			a = math.Pi / 2 * float64(i) / float64(lat)
+		}
+		for j := 0; j <= lon; j++ {
+			bb := 2 * math.Pi * float64(j) / float64(lon)
+			t[i*(lon+1)+j] = vec3{math.Cos(a) * math.Cos(bb), math.Sin(a), math.Cos(a) * math.Sin(bb)}
+		}
+	}
+	sphTabs[k] = t
+	return t
+}
+
 func sphere(b *batch, p vec3, r float64, col rgba, lat, lon int) {
-	lat, lon = lat*segMul, lon*segMul
+	lat, lon = lodSegs(lat), lodSegs(lon)
 	defer withTex(xf{p, vec3{1, 0, 0}, vec3{0, 1, 0}, vec3{0, 0, 1}})()
+	tb := sphTab(lat, lon, false)
+	w := lon + 1
 	for i := 0; i < lat; i++ {
-		a0 := math.Pi * (float64(i)/float64(lat) - 0.5)
-		a1 := math.Pi * (float64(i+1)/float64(lat) - 0.5)
 		for j := 0; j < lon; j++ {
-			b0 := 2 * math.Pi * float64(j) / float64(lon)
-			b1 := 2 * math.Pi * float64(j+1) / float64(lon)
-			n := func(a, bb float64) vec3 { return v3(math.Cos(a)*math.Cos(bb), math.Sin(a), math.Cos(a)*math.Sin(bb)) }
-			n00, n01, n11, n10 := n(a0, b0), n(a0, b1), n(a1, b1), n(a1, b0)
+			n00, n01, n11, n10 := tb[i*w+j], tb[i*w+j+1], tb[(i+1)*w+j+1], tb[(i+1)*w+j]
 			b.quadS(p.add(n00.mul(r)), p.add(n01.mul(r)), p.add(n11.mul(r)), p.add(n10.mul(r)), n00, n01, n11, n10, col)
 		}
 	}
@@ -206,17 +245,14 @@ func sphere(b *batch, p vec3, r float64, col rgba, lat, lon int) {
 func hemi(b *batch, p, up vec3, r float64, col rgba, lat, lon int) {
 	x, y := basis(up)
 	defer withTex(xf{p, x, y, up})()
-	lat, lon = lat*segMul, lon*segMul
+	lat, lon = lodSegs(lat), lodSegs(lon)
+	tb := sphTab(lat, lon, true)
+	w := lon + 1
+	// table (cos a cos b, sin a, cos a sin b) -> x*(cos a cos b) + y*(cos a sin b) + up*(sin a)
+	n := func(q vec3) vec3 { return x.mul(q.x).add(y.mul(q.z)).add(up.mul(q.y)) }
 	for i := 0; i < lat; i++ {
-		a0 := math.Pi / 2 * float64(i) / float64(lat)
-		a1 := math.Pi / 2 * float64(i+1) / float64(lat)
 		for j := 0; j < lon; j++ {
-			b0 := 2 * math.Pi * float64(j) / float64(lon)
-			b1 := 2 * math.Pi * float64(j+1) / float64(lon)
-			n := func(a, bb float64) vec3 {
-				return x.mul(math.Cos(a) * math.Cos(bb)).add(y.mul(math.Cos(a) * math.Sin(bb))).add(up.mul(math.Sin(a)))
-			}
-			n00, n01, n11, n10 := n(a0, b0), n(a0, b1), n(a1, b1), n(a1, b0)
+			n00, n01, n11, n10 := n(tb[i*w+j]), n(tb[i*w+j+1]), n(tb[(i+1)*w+j+1]), n(tb[(i+1)*w+j])
 			b.quadS(p.add(n00.mul(r)), p.add(n01.mul(r)), p.add(n11.mul(r)), p.add(n10.mul(r)), n00, n01, n11, n10, col)
 		}
 	}
@@ -310,7 +346,19 @@ func rod(a, b vec3, r float64, col rgba) {
 	cyl(&bEnv, a, b, r, r, 12, col, true)
 }
 
-func ball(p vec3, r float64, col rgba) { sphere(&bEnv, p, r, col, 6, 10) }
+func ball(p vec3, r float64, col rgba) {
+	switch {
+	case r < 0.015:
+		save := segMul
+		segMul = math.Min(segMul, 1)
+		sphere(&bEnv, p, r, col, 4, 6) // a pin head: a few facets is all it ever shows
+		segMul = save
+	case r < 0.04:
+		sphere(&bEnv, p, r, col, 5, 8)
+	default:
+		sphere(&bEnv, p, r, col, 6, 10)
+	}
+}
 
 func sprite(p vec3, s float64, col rgba) {
 	r, u := camR.mul(s), camU.mul(s)

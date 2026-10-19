@@ -174,12 +174,87 @@ func (e *editor) updateBladeExt(dt float64) {
 // drawBladeExt: the diagonal floor blades - box-section telescoping emitters running from the
 // bottom collar of the energy blade down to just above the deck, angled out over the base.
 // The sheet comes out of a glowing trench along their upper face (the face toward the sheet).
+// extKey: a generator's floor telescopes at rest (stowed or fully out), for the static cache
+type extKey struct {
+	p, prev, next pt2
+	out           bool
+	fyA, fyB      float64
+}
+
+// cachedChunk: geometry that only changes when its key does is built once into the static
+// generator buffer (uploaded to the GPU only when the set of chunks changes)
+var (
+	chunkCache      = map[any][]float32{}
+	chunkFrameKeys  []any
+	chunkPrevKeys   []any
+	chunkCacheUsed  = map[any]int{}
+	chunkFrameCount int
+)
+
+func cachedChunk(key any, build func()) {
+	if _, ok := chunkCache[key]; !ok {
+		start := len(bEnv.v)
+		build()
+		chunkCache[key] = append([]float32(nil), bEnv.v[start:]...)
+		bEnv.v = bEnv.v[:start]
+	}
+	chunkCacheUsed[key] = chunkFrameCount
+	chunkFrameKeys = append(chunkFrameKeys, key)
+}
+
+var (
+	extCache     = map[extKey][]float32{}
+	extFrameKeys []extKey
+	extPrevKeys  []extKey
+	bxGeom       = true // drawBladeExt: emit the hardware
+	bxFX         = true // ...and/or the energy effects
+)
+
+// drawBladeExt: the floor telescopes and lower lenses. At rest their hardware is built once
+// into the static generator buffer; only the moving ones and the energy effects are drawn
+// every frame.
 func (e *editor) drawBladeExt(i int, p, prev, next pt2, col rgba) {
 	ext := e.extOf(i)
-	if ext < 0.005 {
-		if deployAt(p) == nil {
-			e.bottomLenses(i, p, prev, next, 0, col)
+	if deployAt(p) != nil && ext < 0.005 {
+		return
+	}
+	if (ext < 0.005 || ext > 0.999) && e.liftOf(i) == 0 {
+		n := len(e.pts)
+		key := extKey{p: p, prev: prev, next: next, out: ext > 0.999, fyA: floorGap, fyB: floorGap}
+		if e.jointPair(i, (i-1+n)%n) {
+			key.fyA = floorOver
 		}
+		if e.jointPair(i, (i+1)%n) {
+			key.fyB = floorOver
+		}
+		if _, ok := extCache[key]; !ok {
+			start := len(bEnv.v)
+			bxFX = false
+			e.bladeExtDraw(i, p, prev, next, col, ext)
+			bxFX = true
+			extCache[key] = append([]float32(nil), bEnv.v[start:]...)
+			bEnv.v = bEnv.v[:start]
+			if len(extCache) > 160 {
+				for k := range extCache {
+					if k != key {
+						delete(extCache, k)
+						break
+					}
+				}
+			}
+		}
+		extFrameKeys = append(extFrameKeys, key)
+		bxGeom = false
+		e.bladeExtDraw(i, p, prev, next, col, ext)
+		bxGeom = true
+		return
+	}
+	e.bladeExtDraw(i, p, prev, next, col, ext)
+}
+
+func (e *editor) bladeExtDraw(i int, p, prev, next pt2, col rgba, ext float64) {
+	if ext < 0.005 {
+		e.bottomLenses(i, p, prev, next, 0, col)
 		return
 	}
 	e.bottomLenses(i, p, prev, next, ext, col)
@@ -212,11 +287,15 @@ func (e *editor) drawBladeExt(i int, p, prev, next pt2, col rgba) {
 		dn := d.mul(1 / Ld)
 		nUp := up.sub(dn.mul(up.dot(dn))).norm() // in the sheet's plane, toward the sheet
 		// collar housing the arm folds out of
-		useMat(mCast)
-		bevelBox(&bEnv, o.sub(nUp.mul(0.03)).add(dv.mul(-0.01)), wn, up, dv, 0.04, 0.045, 0.03, 0.008, cIron)
-		// three nested box sections; the top face of each sits on the sheet's edge line
 		type sec struct{ hw, hh float64 }
 		secs := []sec{{0.032, 0.024}, {0.027, 0.02}, {0.022, 0.016}}
+		if !bxGeom {
+			secs = nil
+		} else {
+			useMat(mCast)
+			bevelBox(&bEnv, o.sub(nUp.mul(0.03)).add(dv.mul(-0.01)), wn, up, dv, 0.04, 0.045, 0.03, 0.008, cIron)
+		}
+		// three nested box sections; the top face of each sits on the sheet's edge line
 		for si, sc := range secs {
 			u0 := float64(si) / 3 * 0.9
 			u1 := math.Min(1, u0+0.42)
@@ -246,13 +325,15 @@ func (e *editor) drawBladeExt(i int, p, prev, next pt2, col rgba) {
 			q0, q1 := a0.add(nUp.mul(0.0008)), a1.add(nUp.mul(0.0008))
 			bEnv.quadF(q0.sub(wn.mul(tw)), q1.sub(wn.mul(tw)), q1.add(wn.mul(tw)), q0.add(wn.mul(tw)), nUp, rgba{0.01, 0.012, 0.012, 1})
 		}
-		// end cap with an emitter lens; it hangs just above the deck, it doesn't stand on it
-		useMat(mCast)
-		bevelBox(&bEnv, tip.sub(nUp.mul(0.016)).add(dn.mul(0.006)), wn, nUp, dn, 0.024, 0.018, 0.008, 0.004, cIron)
-		// a short level mount on the tip carries the lens pushed out from the lower box
-		nz := tip.add(dv.mul(0.012))
-		bevelBox(&bEnv, nz, wn, up, dv, 0.03, 0.03, 0.014, 0.004, cIron.scale(1.15))
-		if ext > 0.55 && e.sideWallPower(i, side) > 0.05 {
+		if bxGeom {
+			// end cap with an emitter lens; it hangs just above the deck, it doesn't stand on it
+			useMat(mCast)
+			bevelBox(&bEnv, tip.sub(nUp.mul(0.016)).add(dn.mul(0.006)), wn, nUp, dn, 0.024, 0.018, 0.008, 0.004, cIron)
+			// a short level mount on the tip carries the lens pushed out from the lower box
+			nz := tip.add(dv.mul(0.012))
+			bevelBox(&bEnv, nz, wn, up, dv, 0.03, 0.03, 0.014, 0.004, cIron.scale(1.15))
+		}
+		if bxFX && ext > 0.55 && e.sideWallPower(i, side) > 0.05 {
 			g := float32(math.Min(1, (ext-0.55)/0.4) * e.sideWallPower(i, side))
 			// energy welling out of the trench along its length
 			ribbon(o, tip, 0.018, col.alpha(0.3*g))
@@ -314,10 +395,12 @@ func (e *editor) bottomLenses(i int, p, prev, next pt2, ext float64, col rgba) {
 		if !ok {
 			continue
 		}
-		seedTex(71000 + float64(i)*17 + float64(side))
-		emitterLens(fc, dv, dv.cross(up).norm(), up)
+		if bxGeom {
+			seedTex(71000 + float64(i)*17 + float64(side))
+			emitterLens(fc, dv, dv.cross(up).norm(), up)
+		}
 		pw := float32(e.sideWallPower(i, side))
-		if pw > 0.05 {
+		if bxFX && pw > 0.05 {
 			lp := fc.add(dv.mul(0.04))
 			fl := float32(0.75 + 0.25*math.Sin(fxTime()*11+float64(i)*3+float64(side)))
 			sprite(lp, 0.075, col.alpha(0.55*fl*pw))
@@ -832,33 +915,54 @@ var (
 )
 
 func beginGenFrame() {
+	chunkFrameCount++
+	if chunkFrameCount%600 == 0 {
+		for k, f := range chunkCacheUsed {
+			if chunkFrameCount-f > 300 {
+				delete(chunkCache, k)
+				delete(chunkCacheUsed, k)
+			}
+		}
+	}
+	chunkFrameKeys = chunkFrameKeys[:0]
+	extFrameKeys = extFrameKeys[:0]
 	genFrameKeys = genFrameKeys[:0]
 	plateFrameKeys = plateFrameKeys[:0]
 }
 
 // endGenFrame rebuilds the shared generator buffer only when the set of posts changed
+// genPart: one cached piece of static generator geometry; each gets its own GPU buffer, so a
+// change (a post moved, a plate forged) re-uploads only the pieces that changed
+type genPart struct {
+	key any
+	v   []float32
+}
+
+var genParts []genPart
+
 func endGenFrame() {
-	same := len(genFrameKeys) == len(genPrevKeys) && len(plateFrameKeys) == len(platePrevKeys)
-	for i := 0; same && i < len(genFrameKeys); i++ {
-		same = genFrameKeys[i] == genPrevKeys[i]
-	}
-	for i := 0; same && i < len(plateFrameKeys); i++ {
-		same = plateFrameKeys[i] == platePrevKeys[i]
-	}
-	if same {
-		return
-	}
-	bGen.reset()
+	sort.Strings(plateFrameKeys) // plates come out of a map in random order
+	genParts = genParts[:0]
 	for _, k := range genFrameKeys {
-		if gc := genCache[k]; gc != nil {
-			bGen.v = append(bGen.v, gc.v...)
+		if gc := genCache[k]; gc != nil && len(gc.v) > 0 {
+			genParts = append(genParts, genPart{k, gc.v})
 		}
 	}
 	for _, k := range plateFrameKeys {
-		bGen.v = append(bGen.v, plateCache[k]...)
+		if v := plateCache[k]; len(v) > 0 {
+			genParts = append(genParts, genPart{k, v})
+		}
 	}
-	genPrevKeys = append(genPrevKeys[:0], genFrameKeys...)
-	platePrevKeys = append(platePrevKeys[:0], plateFrameKeys...)
+	for _, k := range extFrameKeys {
+		if v := extCache[k]; len(v) > 0 {
+			genParts = append(genParts, genPart{k, v})
+		}
+	}
+	for _, k := range chunkFrameKeys {
+		if v := chunkCache[k]; len(v) > 0 {
+			genParts = append(genParts, genPart{k, v})
+		}
+	}
 	genVer++
 }
 

@@ -19,6 +19,7 @@ var shaderFS embed.FS
 const (
 	glArrayBuffer        = 0x8892
 	glStreamDraw         = 0x88E0
+	glStaticDraw         = 0x88E4
 	glVertexShader       = 0x8B31
 	glFragmentShader     = 0x8B30
 	glCompileStatus      = 0x8B81
@@ -232,7 +233,7 @@ func loadGL33() error {
 		"glAttachShader": &glAttachShaderP, "glLinkProgram": &glLinkProgramP, "glGetProgramiv": &glGetProgramivP,
 		"glGetProgramInfoLog": &glGetProgramInfoLogP, "glUseProgram": &glUseProgramP, "glGetUniformLocation": &glGetUniformLocationP,
 		"glUniform1i": &glUniform1iP, "glUniform1fv": &glUniform1fvP, "glUniform2fv": &glUniform2fvP, "glUniform3fv": &glUniform3fvP,
-		"glUniform4fv": &glUniform4fvP, "glUniformMatrix4fv": &glUniformMatrix4fvP, "glGenBuffers": &glGenBuffersP,
+		"glUniform4fv": &glUniform4fvP, "glUniformMatrix4fv": &glUniformMatrix4fvP, "glGenBuffers": &glGenBuffersP, "glDeleteBuffers": &glDeleteBuffersP,
 		"glBindBuffer": &glBindBufferP, "glBufferData": &glBufferDataP, "glVertexAttribPointer": &glVertexAttribPointerP,
 		"glEnableVertexAttribArray": &glEnableVertexAttribArrayP, "glDisableVertexAttribArray": &glDisableVertexAttribArrayP,
 		"glGenVertexArrays": &glGenVertexArraysP, "glBindVertexArray": &glBindVertexArrayP, "glActiveTexture": &glActiveTextureP,
@@ -411,10 +412,27 @@ func (r *renderer) uploadAll() {
 		}
 		r.uploadedStatic = r.staticVer
 	}
-	if r.uploadedGen != genVer || gpu[&bGen].vbo == 0 {
-		id, n := r.upload(&bGen, bGen.v)
-		gpu[&bGen] = gpuBatch{id, n / vstride, false}
-		r.uploadedGen = genVer
+	// static generator pieces: one buffer each, uploaded once, freed when unused for a while
+	genUploadN++
+	for _, p := range genParts {
+		g := genVBOs[p.key]
+		if g == nil {
+			call(glGenBuffersP, 1, uintptr(unsafe.Pointer(&gIDs[0])))
+			g = &genVBO{vbo: gIDs[0], n: len(p.v) / vstride}
+			call(glBindBufferP, glArrayBuffer, uintptr(g.vbo))
+			call(glBufferDataP, glArrayBuffer, uintptr(len(p.v)*4), uintptr(unsafe.Pointer(&p.v[0])), glStaticDraw)
+			genVBOs[p.key] = g
+		}
+		g.used = genUploadN
+	}
+	if genUploadN%30 == 0 && glDeleteBuffersP != 0 {
+		for k, g := range genVBOs {
+			if genUploadN-g.used > 30 {
+				gIDs[0] = g.vbo
+				call(glDeleteBuffersP, 1, uintptr(unsafe.Pointer(&gIDs[0])))
+				delete(genVBOs, k)
+			}
+		}
 	}
 	for _, b := range []*tbatch{&bSoft, &bShadow, &bSmoke, &bFire} {
 		id, n := r.upload(b, b.v)
@@ -442,6 +460,31 @@ func bindAttribs(tex bool) {
 	call(glVertexAttribPointerP, 2, 4, glFloatType, 0, vstride*4, 24)
 	call(glVertexAttribPointerP, 3, 4, glFloatType, 0, vstride*4, 40)
 	call(glVertexAttribPointerP, 4, 3, glFloatType, 0, vstride*4, 56)
+}
+
+type genVBO struct {
+	vbo  uint32
+	n    int
+	used int
+}
+
+var (
+	genVBOs          = map[any]*genVBO{}
+	genUploadN       int
+	glDeleteBuffersP uintptr
+)
+
+// drawGenParts: every static generator piece in use this frame
+func drawGenParts() {
+	for _, p := range genParts {
+		g := genVBOs[p.key]
+		if g == nil || g.n == 0 {
+			continue
+		}
+		call(glBindBufferP, glArrayBuffer, uintptr(g.vbo))
+		bindAttribs(false)
+		call(glDrawArraysP, glTriangles, 0, uintptr(g.n))
+	}
 }
 
 func drawB(key any, mode uintptr) {
@@ -522,7 +565,7 @@ func (r *renderer) beginFrame(cam vec3) int {
 		call(glUseProgramP, uintptr(r.shadow.id))
 		r.shadow.m4("u_vp", s.vp)
 		drawB(&bStatic, glTriangles)
-		drawB(&bGen, glTriangles)
+		drawGenParts()
 		drawB(&bEnv, glTriangles)
 	}
 	return n
@@ -599,7 +642,7 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 	r.lit.m4("u_vp", vpm)
 	if r.q.mirror {
 		drawB(&bStatic, glTriangles)
-		drawB(&bGen, glTriangles)
+		drawGenParts()
 		drawB(&bEnv, glTriangles)
 		r.drawGlowPass(vpm, false)
 	}
@@ -636,7 +679,7 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 	r.lit.f3("u_cam", cam)
 	r.lit.f1("u_alphaMode", 0)
 	drawB(&bStatic, glTriangles)
-	drawB(&bGen, glTriangles)
+	drawGenParts()
 	drawB(&bEnv, glTriangles)
 	r.lit.f1("u_emisGain", 1.3)
 	drawB(&bOpaque, glTriangles)

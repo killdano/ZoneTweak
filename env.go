@@ -47,11 +47,22 @@ const envH = 5.2
 func (e *editor) buildEnvironment() {
 	if !envHave || !e.manipulating() {
 		g, x0, x1, z0, z1 := e.roomFrame()
-		ch := !envHave || math.Abs(g.tx-envG.tx) > 0.6 || math.Abs(g.tz-envG.tz) > 0.6 ||
-			math.Abs(g.a-envG.a) > 0.02 || math.Abs(g.b-envG.b) > 0.02 ||
-			[4]float64{x0, x1, z0, z1} != envBox
-		if ch {
-			envG, envBox, envHave = g, [4]float64{x0, x1, z0, z1}, true
+		major := !envHave || math.Abs(g.tx-envG.tx) > 0.6 || math.Abs(g.tz-envG.tz) > 0.6 ||
+			math.Abs(g.a-envG.a) > 0.02 || math.Abs(g.b-envG.b) > 0.02
+		if !major {
+			// same frame: just grow or shrink the box, measured in the room's own frame
+			g = envG
+			x0, x1, z0, z1 = boxIn(g, e.pts)
+		}
+		box := [4]float64{x0, x1, z0, z1}
+		switch {
+		case !envHave:
+			envG, envBox, envHave = g, box, true
+		case major || box != envBox:
+			// the cell only changes shape where you can't see it happen
+			if e.roomChangeHidden(major, box) {
+				envG, envBox = g, box
+			}
 		}
 	}
 	g := envG
@@ -72,8 +83,97 @@ func (e *editor) buildEnvironment() {
 	e.animateEnv()
 }
 
+// boxIn: the boundary's bounds in frame g, rounded out to half metres
+func boxIn(g rigid2, pts []pt2) (float64, float64, float64, float64) {
+	inv := g.inv()
+	x0, x1, z0, z1 := -2.0, 2.0, -2.0, 2.0
+	for i, p := range pts {
+		q := inv.apply(p)
+		if i == 0 {
+			x0, x1, z0, z1 = q[0], q[0], q[1], q[1]
+		}
+		x0, x1 = math.Min(x0, q[0]), math.Max(x1, q[0])
+		z0, z1 = math.Min(z0, q[1]), math.Max(z1, q[1])
+	}
+	return math.Floor(x0*2) / 2, math.Ceil(x1*2) / 2, math.Floor(z0*2) / 2, math.Ceil(z1*2) / 2
+}
+
+// roomChangeHidden: true when every part of the cell that the change would touch is out of
+// the player's view. A box change only touches strips along the walls that move (plus the
+// ends of what spans the room); a change of frame touches everything, so it waits until
+// you look straight down at the deck or up at the ceiling.
+func (e *editor) roomChangeHidden(major bool, nb [4]float64) bool {
+	eye := e.hmd.pos()
+	fwd := e.hmd.axis(2).mul(-1)
+	if major {
+		return math.Abs(fwd.y) > 0.82
+	}
+	const m = 2.6
+	cosLim := math.Cos(72 * math.Pi / 180) // wider than any headset's half-FOV
+	g := envG
+	visible := func(gx0, gx1, gz0, gz1 float64) bool {
+		for i := 0; i <= 6; i++ {
+			for j := 0; j <= 6; j++ {
+				for _, y := range []float64{0.05, envH * 0.5, envH - 0.1} {
+					q := g.apply(pt2{gx0 + (gx1-gx0)*float64(i)/6, gz0 + (gz1-gz0)*float64(j)/6})
+					d := v3(q[0], y, q[1]).sub(eye)
+					l := d.length()
+					if l < 1e-3 || d.dot(fwd)/l > cosLim {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+	ob := envBox
+	lo, hi := math.Min(ob[2], nb[2])-m, math.Max(ob[3], nb[3])+m
+	if ob[0] != nb[0] && visible(math.Min(ob[0], nb[0])-m-0.3, math.Max(ob[0], nb[0])-m+1.8, lo, hi) {
+		return false
+	}
+	if ob[1] != nb[1] && visible(math.Min(ob[1], nb[1])+m-1.8, math.Max(ob[1], nb[1])+m+0.3, lo, hi) {
+		return false
+	}
+	lo, hi = math.Min(ob[0], nb[0])-m, math.Max(ob[1], nb[1])+m
+	if ob[2] != nb[2] && visible(lo, hi, math.Min(ob[2], nb[2])-m-0.3, math.Max(ob[2], nb[2])-m+1.8) {
+		return false
+	}
+	if ob[3] != nb[3] && visible(lo, hi, math.Min(ob[3], nb[3])+m-1.8, math.Max(ob[3], nb[3])+m+0.3) {
+		return false
+	}
+	return true
+}
+
+// envBays: wall bays on a fixed grid in the room frame (so walls that don't move keep exactly
+// the same bays when the cell grows or shrinks); returns [c0,c1] ranges and grid indices
+func envBays(lo, hi float64) ([][2]float64, []int) {
+	const bw = 1.6
+	var cuts []float64
+	cuts = append(cuts, lo)
+	for k := math.Ceil((lo-bw/2)/bw + 1e-9); bw*k+bw/2 < hi-1e-9; k++ {
+		c := bw*k + bw/2
+		if c > lo+1e-9 {
+			cuts = append(cuts, c)
+		}
+	}
+	cuts = append(cuts, hi)
+	// fold slivers at the ends into their neighbours
+	if len(cuts) > 2 && cuts[1]-cuts[0] < 0.8 {
+		cuts = append(cuts[:1], cuts[2:]...)
+	}
+	if n := len(cuts); n > 2 && cuts[n-1]-cuts[n-2] < 0.8 {
+		cuts = append(cuts[:n-2], cuts[n-1])
+	}
+	var out [][2]float64
+	var idx []int
+	for i := 0; i+1 < len(cuts); i++ {
+		out = append(out, [2]float64{cuts[i], cuts[i+1]})
+		idx = append(idx, int(math.Round((cuts[i]+cuts[i+1])/2/bw)))
+	}
+	return out, idx
+}
+
 func (e *editor) buildStatic(g rigid2, x0, x1, z0, z1 float64) {
-	rng := rand.New(rand.NewSource(int64(math.Abs(x0*1000+z1*77)) + 12345))
 	bStatic.reset()
 	bStaticL.reset()
 	bFloorS.reset()
@@ -85,6 +185,8 @@ func (e *editor) buildStatic(g rigid2, x0, x1, z0, z1 float64) {
 	envLamps = envLamps[:0]
 	envJunctions = envJunctions[:0]
 	primCounter = 1000
+	stableTex = true
+	defer func() { stableTex = false }()
 	W := func(x, z float64) pt2 { return g.apply(pt2{x, z}) }
 	gx := g.apply(pt2{1, 0})
 	X := v3(gx[0]-g.tx, 0, gx[1]-g.tz)
@@ -95,7 +197,7 @@ func (e *editor) buildStatic(g rigid2, x0, x1, z0, z1 float64) {
 	texF = xf{vec3{}, vec3{1, 0, 0}, vec3{0, 1, 0}, vec3{0, 0, 1}}
 	texOff = vec3{}
 
-	o := fl(W(x0, z0), 0)
+	o := fl(W(0, 0), 0) // anchored to the room frame, not its corner: resizing doesn't slide the deck
 	floorFrame = xf{o, X, up, Z}
 	useMat(mSteel)
 	bFloorQ.quadF(fl(W(x0-0.3, z0-0.3), 0), fl(W(x1+0.3, z0-0.3), 0), fl(W(x1+0.3, z1+0.3), 0), fl(W(x0-0.3, z1+0.3), 0), up, rgba{0.2, 0.2, 0.2, 1})
@@ -103,65 +205,72 @@ func (e *editor) buildStatic(g rigid2, x0, x1, z0, z1 float64) {
 	// ceiling deck + trusses
 	useMat(mWall)
 	bStatic.quadF(fl(W(x0, z0), H), fl(W(x1, z0), H), fl(W(x1, z1), H), fl(W(x0, z1), H), v3(0, -1, 0), cPlateDk)
-	zc := (z0 + z1) / 2
-	hz := (z1 - z0) / 2
-	for x := x0 + 1; x < x1-0.5; x += 2 {
-		f := xf{fl(W(x, zc), 0), X, up, Z}
-		useMat(mCast)
-		bbox(&bStatic, f, 0, H-0.03, 0, 0.11, 0.03, hz, 0.008, cIron)
-		bbox(&bStatic, f, 0, H-0.42, 0, 0.11, 0.025, hz, 0.008, cIron)
-		bbox(&bStatic, f, 0, H-0.225, 0, 0.012, 0.18, hz, 0.004, cIron)
-		n := int(hz * 2 / 0.6)
-		for k := 0; k < n; k++ {
-			za := -hz + float64(k)*0.6
-			zb := za + 0.6
-			ya, yb := H-0.4, H-0.05
-			if k%2 == 1 {
-				ya, yb = yb, ya
+	// trusses on a fixed 2 m grid, built in 0.6 m sections so their ends are the only thing
+	// that changes when the cell resizes
+	for x := 2 * math.Ceil((x0+0.6)/2); x < x1-0.6; x += 2 {
+		f := xf{fl(W(x, 0), 0), X, up, Z}
+		for za := 0.6 * math.Floor(z0/0.6); za < z1; za += 0.6 {
+			a, b := math.Max(za, z0), math.Min(za+0.6, z1)
+			if b-a < 1e-3 {
+				continue
 			}
-			for _, s := range []float64{-0.07, 0.07} {
-				a := f.p(s, ya, za)
-				b := f.p(s, yb, zb)
-				fr := segFrame(a, b, X)
-				bevelBox(&bStatic, fr.o, fr.x, fr.y, fr.z, 0.012, 0.02, b.sub(a).length()/2, 0.005, cIron)
-			}
-		}
-		useMat(mSteel)
-		for k := -hz + 0.3; k < hz; k += 0.6 {
-			for _, s := range []float64{-1, 1} {
-				bp := f.p(s*0.085, H-0.39, k)
-				cyl(&bStatic, bp, bp.add(up.mul(-0.012)), 0.01, 0.01, 6, cSteelEnv, true)
+			zm, hh := (a+b)/2, (b-a)/2
+			useMat(mCast)
+			bbox(&bStatic, f, 0, H-0.03, zm, 0.11, 0.03, hh, 0.008, cIron)
+			bbox(&bStatic, f, 0, H-0.42, zm, 0.11, 0.025, hh, 0.008, cIron)
+			bbox(&bStatic, f, 0, H-0.225, zm, 0.012, 0.18, hh, 0.004, cIron)
+			if a == za && b == za+0.6 {
+				ya, yb := H-0.4, H-0.05
+				if int(math.Round(za/0.6))%2 != 0 {
+					ya, yb = yb, ya
+				}
+				for _, sd := range []float64{-0.07, 0.07} {
+					pa := f.p(sd, ya, za)
+					pb := f.p(sd, yb, za+0.6)
+					fr := segFrame(pa, pb, X)
+					bevelBox(&bStatic, fr.o, fr.x, fr.y, fr.z, 0.012, 0.02, pb.sub(pa).length()/2, 0.005, cIron)
+				}
+				useMat(mSteel)
+				for _, sd := range []float64{-1, 1} {
+					bp := f.p(sd*0.085, H-0.39, za+0.3)
+					cyl(&bStatic, bp, bp.add(up.mul(-0.012)), 0.01, 0.01, 6, cSteelEnv, true)
+				}
 			}
 		}
 	}
-	// cable trays near ceiling along X
-	for _, zz := range []float64{z0 + 0.9, z1 - 0.9} {
-		f := xf{fl(W((x0+x1)/2, zz), 0), X, up, Z}
-		hx := (x1 - x0) / 2
-		useMat(mSteel)
-		bbox(&bStatic, f, 0, H-0.75, 0, hx, 0.008, 0.18, 0.003, cSteelEnv.scale(0.7))
-		for _, s := range []float64{-1, 1} {
-			bbox(&bStatic, f, 0, H-0.71, s*0.18, hx, 0.04, 0.006, 0.003, cSteelEnv.scale(0.7))
-		}
-		for x := -hx + 0.4; x < hx; x += 1.2 {
-			for _, s := range []float64{-1, 1} {
-				cyl(&bStatic, f.p(x, H-0.75, s*0.17), f.p(x, H-0.42, s*0.17), 0.008, 0.008, 6, cSteelEnv, false)
+	// cable trays near ceiling along X, in 1.2 m sections on a fixed grid
+	for ti, zz := range []float64{z0 + 0.9, z1 - 0.9} {
+		f := xf{fl(W(0, zz), 0), X, up, Z}
+		for xa := 1.2 * math.Floor(x0/1.2); xa < x1; xa += 1.2 {
+			a, b := math.Max(xa, x0), math.Min(xa+1.2, x1)
+			if b-a < 1e-3 {
+				continue
 			}
-		}
-		useMat(mRubber)
-		for c := 0; c < 5; c++ {
-			zoff := -0.12 + float64(c)*0.06
-			x := -hx + 0.4
-			for x+1.2 < hx {
-				sag := 0.04 + 0.12*rng.Float64()
-				if c == 4 && rng.Float64() < 0.3 {
-					sag = 0.5 + 0.4*rng.Float64()
+			xm, hh := (a+b)/2, (b-a)/2
+			useMat(mSteel)
+			bbox(&bStatic, f, xm, H-0.75, 0, hh, 0.008, 0.18, 0.003, cSteelEnv.scale(0.7))
+			for _, sd := range []float64{-1, 1} {
+				bbox(&bStatic, f, xm, H-0.71, sd*0.18, hh, 0.04, 0.006, 0.003, cSteelEnv.scale(0.7))
+			}
+			if xa < x0+0.4 || xa+1.2 > x1-0.4 {
+				continue
+			}
+			for _, sd := range []float64{-1, 1} {
+				cyl(&bStatic, f.p(xa, H-0.75, sd*0.17), f.p(xa, H-0.42, sd*0.17), 0.008, 0.008, 6, cSteelEnv, false)
+			}
+			useMat(mRubber)
+			k := int(math.Round(xa / 1.2))
+			cr := rand.New(rand.NewSource(int64(ti*100000 + k*37 + 777)))
+			for c := 0; c < 5; c++ {
+				zoff := -0.12 + float64(c)*0.06
+				sag := 0.04 + 0.12*cr.Float64()
+				if c == 4 && cr.Float64() < 0.3 {
+					sag = 0.5 + 0.4*cr.Float64()
 				}
-				a := f.p(x, H-0.72, zoff)
-				b := f.p(x+1.2, H-0.72, zoff)
+				pa := f.p(xa, H-0.72, zoff)
+				pb := f.p(xa+1.2, H-0.72, zoff)
 				d := up.mul(-sag * 1.33)
-				hose(&bStatic, a, a.add(b.sub(a).mul(0.3)).add(d), a.add(b.sub(a).mul(0.7)).add(d), b, 0.012+0.006*float64(c%2), rgba{0.04 + 0.02*float32(c%3), 0.04, 0.04, 1}, 10)
-				x += 1.2
+				hose(&bStatic, pa, pa.add(pb.sub(pa).mul(0.3)).add(d), pa.add(pb.sub(pa).mul(0.7)).add(d), pb, 0.012+0.006*float64(c%2), rgba{0.04 + 0.02*float32(c%3), 0.04, 0.04, 1}, 10)
 			}
 		}
 	}
@@ -178,21 +287,42 @@ func (e *editor) buildStatic(g rigid2, x0, x1, z0, z1 float64) {
 	}
 	for si, s := range sides {
 		L := dist2(s.a, s.b)
-		n := int(math.Max(1, math.Round(L/1.6)))
 		dx, dz := (s.b[0]-s.a[0])/L, (s.b[1]-s.a[1])/L
 		inw := X.mul(s.in[0]).add(Z.mul(s.in[1]))
 		along := X.mul(dx).add(Z.mul(dz))
 		P := func(u, d float64) pt2 { return W(s.a[0]+dx*u+s.in[0]*d, s.a[1]+dz*u+s.in[1]*d) }
 		pipeCols := []rgba{cPipeGreen, cPipeRed, cPipeYel}
-		for k := 0; k < n; k++ {
-			u0, u1 := float64(k)*L/float64(n), float64(k+1)*L/float64(n)
+		// the side's own coordinate in the room frame (x for sides 0/2, z for 1/3)
+		lo, hi := s.a[0], s.b[0]
+		if si%2 == 1 {
+			lo, hi = s.a[1], s.b[1]
+		}
+		rev := hi < lo
+		if rev {
+			lo, hi = hi, lo
+		}
+		bays, gidx := envBays(lo, hi)
+		doorBay := -1
+		for bi, b := range bays {
+			if (si == 0 || si == 2) && b[0] <= 0 && b[1] > 0 {
+				doorBay = bi
+			}
+		}
+		for bi, b := range bays {
+			u0, u1 := b[0]-lo, b[1]-lo
+			if rev {
+				u0, u1 = hi-b[1], hi-b[0]
+			}
 			um := (u0 + u1) / 2
 			hw := (u1 - u0) / 2
+			k := gidx[bi]
+			rng := rand.New(rand.NewSource(int64(si*100000 + k*131 + 4242)))
 			fr := xf{fl(P(um, 0), 0), along, up, inw}
 			texF = xf{vec3{}, vec3{1, 0, 0}, vec3{0, 1, 0}, vec3{0, 0, 1}}
-			if (si == 0 || si == 2) && k == n/2 {
+			door := bi == doorBay
+			if door {
 				e.buildDoor(fr, hw, H)
-			} else if (k+si)%3 == 1 {
+			} else if ((k+si)%3+3)%3 == 1 {
 				e.buildAlcove(fr, hw, H, rng)
 			} else {
 				e.buildPanelBay(fr, hw, H, rng, si, k)
@@ -219,7 +349,7 @@ func (e *editor) buildStatic(g rigid2, x0, x1, z0, z1 float64) {
 				d := 0.26 + float64(pi)*0.04
 				col := pipeCols[(pi+si)%3]
 				useMat(material{0, 0.3, 0.55, 0.65})
-				if door := (si == 0 || si == 2) && k == n/2; door && py < 3 {
+				if door && py < 3 {
 					// the low run climbs up and over the doorway so nothing crosses the robots' path
 					dw := hw - 0.15
 					xo, yo := dw+0.3, 3.08
@@ -253,7 +383,7 @@ func (e *editor) buildStatic(g rigid2, x0, x1, z0, z1 float64) {
 		}
 	}
 	// two shadowed ceiling lamps (with a fan under one)
-	cx, cz := (x0+x1)/2, (z0+z1)/2
+	cx, cz := 0.0, 0.0 // the room frame's origin, so the lamps stay put when it resizes
 	for i, off := range []float64{-1.3, 1.3} {
 		p := fl(W(cx+off, cz), H-0.75)
 		envLamps = append(envLamps, p)

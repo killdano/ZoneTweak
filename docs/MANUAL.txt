@@ -95,6 +95,9 @@ UNDO A SAVE
   Close Pimax, delete the edited .vrchap and rename its .bak-YYYYMMDD-HHMMSS copy back.
 
 THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
+  The cell grows and shrinks with your boundary, but only where you're not looking: the
+  walls that need to move wait until they're out of view, and the rest stays exactly as it
+  was.
   GRAPHICS
     Real-time shader renderer: physically based materials (painted steel with chips and
     rust, brushed chrome, rubber, circuit boards with blinking LEDs, hazard paint, riveted

@@ -230,11 +230,19 @@ func (e *editor) jointSparks(r *robot, p, n vec3) {
 func (e *editor) drawRobot(r *robot) {
 	e.robotLighting(r)
 	e.robotRoles(r)
-	segMul = 1
-	if dist2(r.pos, pt2{camPos.x, camPos.z}) < 3.5 {
-		if !potatoMode {
-			segMul = 2
-		}
+	// level of detail by distance: full curve detail up close, fewer facets further away
+	switch d := dist2(r.pos, pt2{camPos.x, camPos.z}); {
+	case d < 1.8:
+		segMul = 1.6
+	case d < 3.5:
+		segMul = 1.15
+	case d < 6:
+		segMul = 0.8
+	default:
+		segMul = 0.6
+	}
+	if potatoMode {
+		segMul *= 0.6
 	}
 	saveC := primCounter
 	primCounter = float64(r.vid) * 977
