@@ -105,6 +105,17 @@ func (e *editor) remLeaveBase(r *removal) {
 	oldBases = append(oldBases, r.ob)
 }
 
+// inView: whether anything within rad of p could be on screen (a cone wider than any headset)
+func (e *editor) inView(p vec3, rad float64) bool {
+	d := p.sub(e.hmd.pos())
+	l := d.length()
+	if l < rad+0.3 {
+		return true
+	}
+	a := math.Acos(math.Max(-1, math.Min(1, d.dot(e.hmd.axis(2).mul(-1))/l)))
+	return a-math.Asin(math.Min(1, rad/l)) < 72*math.Pi/180
+}
+
 func (e *editor) updateRemovals() {
 	t := fxTime()
 	out := removals[:0]
@@ -136,8 +147,12 @@ func (e *editor) updateRemovals() {
 		if t-r.t0 > remDur(r.kind) {
 			if r.kind != remHatch {
 				e.remLeaveBase(r)
+				continue
 			}
-			continue
+			// the sealed hatch stays in the deck until you're not looking at it
+			if !e.inView(fl(r.anchor, 0), 0.45) {
+				continue
+			}
 		}
 		out = append(out, r)
 	}
@@ -437,7 +452,7 @@ func (e *editor) remHatch(r *removal, col rgba) {
 	// hatch doors slide in from under the deck edge and seal it, then settle flush
 	if age > 1.9 {
 		settle := smooth((age - 2.55) / 0.3)
-		y := 0.006 - 0.02*settle
+		y := 0.006 - 0.004*settle // settles flush with the deck
 		for _, sd := range []float64{-1, 1} {
 			off := ax.mul(sd * R * (1 - closeK))
 			useMat(mHazard)

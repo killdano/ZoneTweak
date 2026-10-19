@@ -143,7 +143,8 @@ THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
     neighbours, the shaft telescopes down and sinks into its base, the pistons fold down and the
     cables unplug and coil up, leaving a clean, powered-down base), gets EXTRACTED (a claw
     drops from the ceiling, clamps it and rips it out through the roof), drops through a
-    HATCH (the deck opens, it sinks into the dark and the doors slam shut), or OVERLOADS
+    HATCH (the deck opens, it sinks into the dark and the doors slam shut; the sealed hatch stays in the
+    deck until you look away), or OVERLOADS
     (arcs crawl up it, the bell blows off and the shaft crumples). Whatever base or debris
     is left behind gets salvaged by the robots. Undo brings it straight back.
     A new generator dragged out of a wall hovers until you let go; only then does it grow
