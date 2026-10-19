@@ -7,8 +7,8 @@ ChaperoneTweak. You stand in your room, grab the boundary's corner posts and dra
 you want, then save straight into Pimax's own files:
 `C:\ProgramData\Pimax\runtime\chaperone_info*.vrchap`.
 
-It runs on **OpenXR**, so Pimax must be the active OpenXR runtime (it is when you use
-Pimax Play / Pimax Evo).
+It runs on **OpenXR**, so it works with whichever OpenXR runtime is active: Pimax's own
+(Pimax Play / Evo) or SteamVR.
 
 ## Features
 

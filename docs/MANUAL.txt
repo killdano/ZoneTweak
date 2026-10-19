@@ -1,6 +1,6 @@
 ZONETWEAK — for Pimax Lighthouse
 In-headset editor for the Pimax safety zone (green boundary) (C:\ProgramData\Pimax\runtime\chaperone_info*.vrchap).
-Runs on OpenXR, so Pimax must be the active OpenXR runtime (it is when you use Pimax Play / Evo).
+Runs on OpenXR, so it works with whichever OpenXR runtime is active: Pimax's own or SteamVR.
 
 RUN
   Start Pimax Play / Evo with the headset on, then run ZoneTweak.exe once from Windows.
