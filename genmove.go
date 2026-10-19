@@ -61,13 +61,20 @@ type oldBase struct {
 // instead of snapped and frayed
 var cableStow bool
 
+// collarOn: the base has a shaft standing in it to fit collar brackets to; collarDrop lowers
+// them with a shaft that's sinking away
+var (
+	collarOn   = true
+	collarDrop float64
+)
+
 // oldBaseGeom draws a left-behind base: torn, or for a clean shutdown, whole with its
 // pistons folded down and cables stowed
 func oldBaseGeom(ob *oldBase, at pt2, ax vec3, nbrs ...pt2) {
 	if ob.intact {
-		reattachK, cableStow = 0, true
+		reattachK, cableStow, collarOn = 0, true, false
 		genBaseGeom(at, at, 1, false, 0, ax, nbrs...)
-		reattachK, cableStow = -1, false
+		reattachK, cableStow, collarOn = -1, false, true
 		return
 	}
 	genBaseGeom(at, at, 1, true, 0, ax, nbrs...)
@@ -109,7 +116,9 @@ func drawRetracts() {
 		if k >= 1 {
 			continue
 		}
+		collarOn = false
 		genBaseGeom(r.pos, r.pos, r.g0*(1-smooth(k)), false, 0, r.ax)
+		collarOn = true
 		live = append(live, r)
 	}
 	retracts = live
@@ -561,7 +570,7 @@ func genBaseGeom(anchor, shaftAt pt2, grow float64, torn bool, sink float64, ax 
 			cyl(&bEnv, foot.add(up.mul(0.055*ps)), foot.add(up.mul(0.055*ps)).add(stub.sub(foot).mul(0.45)), 0.022, 0.022, 12, cIron, false)
 			continue
 		}
-		attach := s.add(d.mul(0.105)).add(up.mul(0.24))
+		attach := pistonPin(s, d)
 		k2 := smooth((grow - 0.25) / 0.6)
 		if reattachK >= 0 {
 			k2 = smooth(reattachK / 0.6)
@@ -571,6 +580,9 @@ func genBaseGeom(anchor, shaftAt pt2, grow float64, torn bool, sink float64, ax 
 		if k2 > 0.01 {
 			pistonEnv(base, top, 0.012)
 		}
+	}
+	if !torn && collarOn && grow > 0.25 {
+		collarBrackets(s.add(up.mul(collarDrop)), ax, az)
 	}
 	if reattachK >= 0 && reattachK < 0.62 {
 		genCables(c, s, ax, az, R, sc, 1, true, pose) // still dangling until they snap back in
@@ -906,7 +918,7 @@ func cablePointsR(c, s, ax, az vec3, rad, sc, a float64) (vec3, vec3, vec3) {
 	up := v3(0, 1, 0)
 	d := ax.mul(math.Cos(a)).add(az.mul(math.Sin(a)))
 	plug := c.add(d.mul(rad)).add(up.mul(0.036 * sc))
-	drum := s.add(d.mul(0.118)).add(up.mul(0.2))
+	drum := tetherPort(s, d)
 	return plug, drum, d
 }
 
@@ -963,8 +975,6 @@ func genCables(c, s, ax, az vec3, R, sc, grow float64, torn bool, pose *basePose
 		if grow < 0.7 {
 			continue
 		}
-		useMat(mCast)
-		bevelBox(&bEnv, drum, d, up, d.cross(up), 0.016, 0.026, 0.02, 0.005, cIron)
 		chord := drum.sub(plug).length()
 		taut := math.Min(1, chord/L0)
 		sag := math.Sqrt(math.Max(0, L0*L0-chord*chord)) * 0.5
@@ -982,7 +992,7 @@ func genCables(c, s, ax, az vec3, R, sc, grow float64, torn bool, pose *basePose
 			ca = ca.add(sd.mul(j))
 			cb = cb.sub(sd.mul(j))
 		}
-		hose(&bEnv, plug.add(up.mul(0.06*ps)), ca, cb, drum.add(d.mul(0.012)), cr, rgba{0.04, 0.04, 0.045, 1}, 12)
+		hose(&bEnv, plug.add(up.mul(0.06*ps)), ca, cb, drum, cr, rgba{0.04, 0.04, 0.045, 1}, 12)
 		for b := 0.25; b < 0.8; b += 0.27 {
 			q := bezier(plug.add(up.mul(0.06*ps)), ca, cb, drum, b)
 			q2 := bezier(plug.add(up.mul(0.06*ps)), ca, cb, drum, b+0.03)
@@ -1001,10 +1011,11 @@ func genCables(c, s, ax, az vec3, R, sc, grow float64, torn bool, pose *basePose
 func severedStubs(s vec3, ax vec3, t float64) {
 	up := v3(0, 1, 0)
 	az := ax.cross(up).norm()
+	collarBrackets(s, ax, az)
 	for k := range cableSlots {
 		a := slotAngle(cableSlots[k])
 		d := ax.mul(math.Cos(a)).add(az.mul(math.Sin(a)))
-		top := s.add(d.mul(0.118)).add(up.mul(0.2))
+		top := tetherPort(s, d)
 		sw := 0.03 * math.Sin(t*3+float64(k)*2)
 		end := top.add(up.mul(-0.2)).add(d.mul(0.05 + sw)).add(d.cross(up).mul(sw))
 		hose(&bEnv, top, top.add(d.mul(0.04)), end.add(up.mul(0.06)), end, 0.019, rgba{0.04, 0.04, 0.045, 1}, 6)

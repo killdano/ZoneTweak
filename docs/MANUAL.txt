@@ -151,6 +151,8 @@ THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
     its floor mount. Changed your mind? Grab it again while the base is still growing (or
     while it's still re-docking, about 1.4 s) and the half-made base just sinks back in:
     nothing gets torn off. Same for a freshly fired capsule that hasn't finished landing.
+    The base's pistons and tethers lock onto a steel slewing collar round the middle of the
+    coil housing, so their brackets turn with the base.
     Each sits on a slide-mount base: you can nudge it a little, and if you let go it stays
     where you left it, off-centre on the base. The shaft only travels on the smooth centre
     of the mount: its tethers draw in and go tight as it moves, and at ~11 cm the mount

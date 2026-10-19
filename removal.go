@@ -262,7 +262,9 @@ func (e *editor) remDecommission(r *removal, col rgba) {
 	Hs := r.H - (r.H-0.7)*smooth((age-0.6)/0.9)
 	lift := -0.75 * smooth((age-1.8)/0.6)
 	k2 := 1 - smooth((age-1.0)/0.7)
+	collarDrop = lift
 	r.base(k2, 0)
+	collarDrop = 0
 	if lift > -0.74 {
 		genShaftGeom(r.p, Hs, r.prev, r.next, lift)
 	}

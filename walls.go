@@ -739,12 +739,15 @@ func genShaftGeom(p pt2, H float64, prev, next pt2, lift float64) {
 	cyl(&bEnv, c.add(up.mul(0.1)), c.add(up.mul(0.135)), 0.108, 0.108, 28, rgba{0.8, 0.6, 0.1, 1}, true)
 	useMat(mCast)
 	cyl(&bEnv, c.add(up.mul(0.135)), c.add(up.mul(0.32)), 0.082, 0.077, 28, cIron.scale(1.4), false)
+	// cooling ribs, split round the mounting collar
 	for k := 0; k < 12; k++ {
 		a := float64(k) * math.Pi / 6
 		dv := v3(math.Cos(a), 0, math.Sin(a))
 		fr := frameAt(c.add(dv.mul(0.083)), dv.cross(up))
-		bevelBox(&bEnv, fr.p(0, 0.225, 0), dv, up, dv.cross(up), 0.006, 0.08, 0.008, 0.003, cIron)
+		bevelBox(&bEnv, fr.p(0, (0.145+collarY-collarH)/2, 0), dv, up, dv.cross(up), 0.006, (collarY-collarH-0.145)/2, 0.008, 0.003, cIron)
+		bevelBox(&bEnv, fr.p(0, (collarY+collarH+0.31)/2, 0), dv, up, dv.cross(up), 0.006, (0.31-collarY-collarH)/2, 0.008, 0.003, cIron)
 	}
+	shaftCollar(c)
 	cyl(&bEnv, c.add(up.mul(0.32)), c.add(up.mul(0.36)), 0.09, 0.09, 28, cIron, true)
 	useMat(mSteel)
 	cyl(&bEnv, c.add(up.mul(0.36)), c.add(up.mul(0.42)), 0.072, 0.046, 28, cSteelEnv, false)
@@ -797,6 +800,72 @@ func genShaftGeom(p pt2, H float64, prev, next pt2, lift float64) {
 	restore := withTex(hf)
 	bStaticQuadOn(&bEnv, hf, 0.03, 0.17, 0.035, 0.08, rgba{0.1, 0.4, 0.15, 1})
 	restore()
+}
+
+// the mounting collar: a machined slewing ring round the middle of the coil housing that the
+// base's pistons and tethers lock onto (their brackets ride on it, so it turns with the base)
+const (
+	collarY = 0.23  // centre height
+	collarH = 0.024 // half height
+	collarR = 0.094 // outer radius of the ring
+)
+
+func shaftCollar(c vec3) {
+	up := v3(0, 1, 0)
+	y0, y1 := collarY-collarH, collarY+collarH
+	// stationary race bolted to the housing, chamfered lips top and bottom
+	useMat(mCast)
+	cyl(&bEnv, c.add(up.mul(y0-0.008)), c.add(up.mul(y0)), 0.086, collarR-0.004, 28, cIron.scale(1.1), true)
+	cyl(&bEnv, c.add(up.mul(y1)), c.add(up.mul(y1+0.008)), collarR-0.004, 0.086, 28, cIron.scale(1.1), true)
+	// the turning ring: steel band, a dark bearing seam through the middle
+	useMat(mSteel)
+	cyl(&bEnv, c.add(up.mul(y0)), c.add(up.mul(collarY-0.002)), collarR, collarR, 28, cSteelEnv.scale(0.9), false)
+	cyl(&bEnv, c.add(up.mul(collarY+0.002)), c.add(up.mul(y1)), collarR, collarR, 28, cSteelEnv.scale(0.9), false)
+	useMat(mRubber)
+	cyl(&bEnv, c.add(up.mul(collarY-0.002)), c.add(up.mul(collarY+0.002)), collarR-0.003, collarR-0.003, 28, rgba{0.02, 0.02, 0.022, 1}, false)
+	// bolt heads round the race
+	useMat(mSteel)
+	for k := 0; k < 12; k++ {
+		a := float64(k)*math.Pi/6 + math.Pi/12
+		dv := v3(math.Cos(a), 0, math.Sin(a))
+		for _, y := range []float64{y0 - 0.004, y1 + 0.004} {
+			bp := c.add(dv.mul(0.088)).add(up.mul(y))
+			cyl(&bEnv, bp, bp.add(dv.mul(0.004)), 0.0035, 0.0035, 6, cSteelEnv, true)
+		}
+	}
+}
+
+// pistonPin / tetherPort: where a base slot's piston and tether lock onto the collar
+func pistonPin(s, d vec3) vec3 { return s.add(d.mul(collarR + 0.026)).add(v3(0, collarY, 0)) }
+func tetherPort(s, d vec3) vec3 { return s.add(d.mul(collarR + 0.03)).add(v3(0, collarY, 0)) }
+
+// collarBrackets: the clevis lugs and tether sockets on the collar, lined up with the base's slots
+func collarBrackets(s, ax, az vec3) {
+	up := v3(0, 1, 0)
+	for k := 0; k < 6; k++ {
+		d := slotDir(ax, az, k)
+		sd := d.cross(up)
+		root := s.add(d.mul(collarR)).add(up.mul(collarY))
+		if slotIsCable(k) {
+			// tether socket: a cast boss with a hazard collar the plug seats into
+			useMat(mCast)
+			bevelBox(&bEnv, root.add(d.mul(0.004)), d, up, sd, 0.01, collarH+0.004, 0.024, 0.004, cIron)
+			cyl(&bEnv, root, tetherPort(s, d).sub(d.mul(0.008)), 0.021, 0.019, 14, cIron.scale(1.2), false)
+			useMat(mHazard)
+			cyl(&bEnv, tetherPort(s, d).sub(d.mul(0.008)), tetherPort(s, d), 0.022, 0.022, 14, rgba{0.8, 0.6, 0.1, 1}, true)
+			continue
+		}
+		// clevis: a saddle plate on the ring, two cheeks and a cross pin
+		useMat(mCast)
+		bevelBox(&bEnv, root.add(d.mul(0.004)), d, up, sd, 0.01, collarH+0.004, 0.03, 0.004, cIron)
+		pin := pistonPin(s, d)
+		for _, side := range []float64{-1, 1} {
+			ch := root.add(d.mul(0.018)).add(sd.mul(side * 0.024))
+			bevelBox(&bEnv, ch, d, up, sd, 0.02, 0.02, 0.0045, 0.002, cIron.scale(1.15))
+		}
+		useMat(mChrome)
+		cyl(&bEnv, pin.add(sd.mul(-0.03)), pin.add(sd.mul(0.03)), 0.006, 0.006, 8, cChromeEnv, true)
+	}
 }
 
 const (
@@ -1348,7 +1417,10 @@ func (e *editor) genGlow(p pt2, H float64, prev, next pt2, hot bool, col rgba, f
 	for k := 0; k < 12; k++ {
 		a := float64(k)*math.Pi/6 + math.Pi/12
 		dv := v3(math.Cos(a), 0, math.Sin(a))
-		ribbon(c.add(dv.mul(0.083)).add(up.mul(0.16)), c.add(dv.mul(0.083)).add(up.mul(0.29)), 0.012, ring.alpha(0.5*flick))
+		// the coil glow stops short of the collar and picks up again above it
+		o := c.add(dv.mul(0.083))
+		ribbon(o.add(up.mul(0.16)), o.add(up.mul(collarY-collarH-0.018)), 0.012, ring.alpha(0.5*flick))
+		ribbon(o.add(up.mul(collarY+collarH+0.018)), o.add(up.mul(0.29)), 0.012, ring.alpha(0.5*flick))
 	}
 	blink := 1.0
 	if fault > 0 {
