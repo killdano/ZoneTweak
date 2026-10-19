@@ -101,7 +101,7 @@ func (e *editor) remLeaveBase(r *removal) {
 	if r.ob != nil {
 		return
 	}
-	r.ob = &oldBase{pos: r.anchor, ax: r.ax, t0: fxTime(), joint: r.joint}
+	r.ob = &oldBase{pos: r.anchor, ax: r.ax, t0: fxTime(), joint: r.joint, intact: r.kind == remDecommission}
 	oldBases = append(oldBases, r.ob)
 }
 
@@ -217,8 +217,9 @@ func (r *removal) base(k2, sink float64) {
 	if k2 >= 1 {
 		reattachK = -1
 	}
+	cableStow = r.kind == remDecommission // a clean shutdown unplugs its cables, it doesn't snap them
 	genBaseGeom(r.anchor, r.p, 1, false, 0, r.ax, r.nbrs...)
-	reattachK = -1
+	reattachK, cableStow = -1, false
 	baseLift = 0
 }
 

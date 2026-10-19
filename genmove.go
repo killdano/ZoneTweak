@@ -54,6 +54,23 @@ type oldBase struct {
 	cutSpan     float64
 	fireDebris  bool
 	bell        bool // a blown-off generator bell cap rather than a slab chunk
+	intact      bool // shut down and stowed properly rather than torn off
+}
+
+// cableStow draws a base's cables unplugged and coiled with capped ends (a clean shutdown)
+// instead of snapped and frayed
+var cableStow bool
+
+// oldBaseGeom draws a left-behind base: torn, or for a clean shutdown, whole with its
+// pistons folded down and cables stowed
+func oldBaseGeom(ob *oldBase, at pt2, ax vec3, nbrs ...pt2) {
+	if ob.intact {
+		reattachK, cableStow = 0, true
+		genBaseGeom(at, at, 1, false, 0, ax, nbrs...)
+		reattachK, cableStow = -1, false
+		return
+	}
+	genBaseGeom(at, at, 1, true, 0, ax, nbrs...)
 }
 
 type regrow struct {
@@ -64,6 +81,38 @@ type regrow struct {
 	reattach bool
 	anchor   pt2
 	shear    []*oldBase
+	fresh    bool     // a brand-new post rather than one torn off its base
+	ob       *oldBase // the base a reattach docked onto, for undoing it
+}
+
+// a base that was still growing when its shaft got picked up again: it just sinks back in
+type retract struct {
+	pos pt2
+	ax  vec3
+	t0  float64
+	g0  float64
+}
+
+var retracts []retract
+
+// graceT: how long after letting go a post can be picked up again without tearing anything,
+// the time its base takes to grow or re-dock
+const graceT = 1.4
+
+func regrowGrow(age float64) float64 { return smooth((age - 0.2) / 1.2) }
+
+func drawRetracts() {
+	t := fxTime()
+	live := retracts[:0]
+	for _, r := range retracts {
+		k := (t - r.t0) / 0.35
+		if k >= 1 {
+			continue
+		}
+		genBaseGeom(r.pos, r.pos, r.g0*(1-smooth(k)), false, 0, r.ax)
+		live = append(live, r)
+	}
+	retracts = live
 }
 
 var (
@@ -94,11 +143,61 @@ func anchorOf(p pt2) pt2 {
 }
 
 func (e *editor) grabStart(h *hand, idx int, newPoint bool) {
+	if !newPoint && e.regrab(h, idx) {
+		return
+	}
 	h.gAnchor = anchorOf(e.pts[idx])
 	h.gJoint = jointGen[h.gAnchor]
 	delete(baseAnchor, e.pts[idx])
 	h.gRipped = newPoint
 	h.gNew = newPoint
+}
+
+// regrab: picking a post back up before its base had time to grow (or re-dock) undoes that
+// instead of tearing a half-made base off. Returns true if it took over the grab.
+func (e *editor) regrab(h *hand, idx int) bool {
+	p := e.pts[idx]
+	t := fxTime()
+	if d := deployAt(p); d != nil {
+		for i, x := range deploys {
+			if x == d {
+				deploys = append(deploys[:i], deploys[i+1:]...)
+				break
+			}
+		}
+		h.gAnchor, h.gJoint = p, false
+		delete(baseAnchor, p)
+		h.gRipped, h.gNew = true, true
+		return true
+	}
+	rg := regrowAt(p)
+	if rg == nil || t-rg.t0 >= graceT {
+		return false
+	}
+	for i, x := range regrows {
+		if x == rg {
+			regrows = append(regrows[:i], regrows[i+1:]...)
+			break
+		}
+	}
+	if rg.reattach {
+		if ob := rg.ob; ob != nil {
+			ob.gone = false // the old base it was docking onto is left as it was
+			found := false
+			for _, o := range oldBases {
+				found = found || o == ob
+			}
+			if !found {
+				oldBases = append(oldBases, ob)
+			}
+		}
+	} else if g := regrowGrow(t - rg.t0); g > 0.01 {
+		retracts = append(retracts, retract{pos: p, ax: rg.ax, t0: t, g0: g})
+	}
+	delete(baseAnchor, p)
+	h.gAnchor, h.gJoint = p, false
+	h.gRipped, h.gNew = true, rg.fresh
+	return true
 }
 
 func (e *editor) grabUpdate(h *hand) {
@@ -161,11 +260,11 @@ func (e *editor) grabEnd(h *hand) {
 		if docked, anc, oax, sh := e.plantNearOld(p, ax); docked {
 			// the shaft re-docks on its old base, off-centre where it landed
 			baseAnchor[p] = anc
-			regrows = append(regrows, &regrow{pos: p, t0: fxTime(), ax: oax, reattach: true, anchor: anc})
+			regrows = append(regrows, &regrow{pos: p, t0: fxTime(), ax: oax, reattach: true, anchor: anc, ob: lastDocked, fresh: h.gNew})
 			e.sfx(sndHydraulic, fl(p, 0.2), 0.9)
 			hapticAmp(h.idx, 60, 0.7)
 		} else {
-			regrows = append(regrows, &regrow{pos: p, t0: fxTime(), ax: ax, shear: sh})
+			regrows = append(regrows, &regrow{pos: p, t0: fxTime(), ax: ax, shear: sh, fresh: h.gNew})
 			e.sfx(sndRegrow, fl(p, 0.2), 0.9)
 		}
 	} else if !h.gNew && h.grab >= 0 && h.grab < len(e.pts) {
@@ -569,7 +668,7 @@ func (e *editor) drawGen(i int, p pt2, H float64, prev, next pt2, hot bool, col 
 	} else if rg != nil {
 		age := t - rg.t0
 		lift = math.Max(0, 0.12*(1-age/0.35))
-		grow := smooth((age - 0.2) / 1.2)
+		grow := regrowGrow(age)
 		if len(rg.shear) > 0 && grow > 0.55 {
 			for _, ob := range rg.shear {
 				if !ob.gone && ob.state < 2 {
@@ -829,6 +928,23 @@ func genCables(c, s, ax, az vec3, R, sc, grow float64, torn bool, pose *basePose
 		useMat(mHazard)
 		cyl(&bEnv, plug.add(up.mul(0.03*ps)), plug.add(up.mul(0.06*ps)), 0.022*ps, 0.022*ps, 12, rgba{0.8, 0.6, 0.1, 1}, true)
 		cr := 0.019 * sc
+		if torn && cableStow {
+			// unplugged at the shaft and laid down in a loop, connector capped
+			sd := d.cross(up)
+			side := 1.0
+			if k%2 == 1 {
+				side = -1
+			}
+			top := plug.add(up.mul(0.06 * ps))
+			end := plug.add(d.mul(-0.07)).add(sd.mul(0.08 * side)).add(up.mul(0.058))
+			hose(&bEnv, top, top.add(up.mul(0.05)).add(d.mul(0.02)), end.add(sd.mul(-0.05*side)).add(up.mul(0.02)), end, cr, rgba{0.04, 0.04, 0.045, 1}, 10)
+			dir := sd.mul(-side)
+			useMat(mCast)
+			bevelBox(&bEnv, end.add(dir.mul(0.012)), dir, up, dir.cross(up), 0.016, 0.022, 0.02, 0.005, cIron)
+			useMat(mHazard)
+			cyl(&bEnv, end.add(dir.mul(0.026)), end.add(dir.mul(0.034)), 0.017, 0.017, 10, rgba{0.8, 0.6, 0.1, 1}, true)
+			continue
+		}
 		if torn {
 			// a snapped stub flopping out of the plug, frayed copper at the end
 			end := plug.add(up.mul(0.12)).add(d.mul(0.1)).add(d.cross(up).mul(0.05 * math.Sin(float64(k)*2.1)))

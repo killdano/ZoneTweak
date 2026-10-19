@@ -47,21 +47,36 @@ const envH = 5.2
 func (e *editor) buildEnvironment() {
 	if !envHave || !e.manipulating() {
 		g, x0, x1, z0, z1 := e.roomFrame()
-		major := !envHave || math.Abs(g.tx-envG.tx) > 0.6 || math.Abs(g.tz-envG.tz) > 0.6 ||
-			math.Abs(g.a-envG.a) > 0.02 || math.Abs(g.b-envG.b) > 0.02
-		if !major {
-			// same frame: just grow or shrink the box, measured in the room's own frame
-			g = envG
-			x0, x1, z0, z1 = boxIn(g, e.pts)
-		}
 		box := [4]float64{x0, x1, z0, z1}
 		switch {
 		case !envHave:
 			envG, envBox, envHave = g, box, true
-		case major || box != envBox:
-			// the cell only changes shape where you can't see it happen
-			if e.roomChangeHidden(major, box) {
+		default:
+			// the cell only turns if the boundary's main direction swung a long way; otherwise it
+			// keeps its frame and just grows or shrinks, and either way only where you can't see
+			d := math.Atan2(g.c, g.a) - math.Atan2(envG.c, envG.a)
+			d = math.Mod(d+math.Pi/4, math.Pi/2)
+			if d < 0 {
+				d += math.Pi / 2
+			}
+			d -= math.Pi / 4
+			if math.Abs(d) > 12*math.Pi/180 && e.roomChangeHidden(true, box) {
 				envG, envBox = g, box
+				break
+			}
+			ob := [4]float64{}
+			ob[0], ob[1], ob[2], ob[3] = boxIn(envG, e.pts)
+			// each wall moves on its own, as soon as its own strip is out of view, so a room
+			// that grew on two opposite sides doesn't wait for a view that hides both at once
+			for i := 0; i < 4; i++ {
+				if ob[i] == envBox[i] {
+					continue
+				}
+				nb := envBox
+				nb[i] = ob[i]
+				if e.roomChangeHidden(false, nb) {
+					envBox = nb
+				}
 			}
 		}
 	}

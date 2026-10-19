@@ -96,8 +96,9 @@ UNDO A SAVE
 
 THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
   The cell grows and shrinks with your boundary, but only where you're not looking: the
-  walls that need to move wait until they're out of view, and the rest stays exactly as it
-  was.
+  walls that need to move wait until they're out of view (each wall on its own), and the
+  rest stays exactly as it was. If the boundary's main direction swings round a lot, the
+  whole cell re-aligns the next time you look straight down at the deck or up at the ceiling.
   GRAPHICS
     Real-time shader renderer: physically based materials (painted steel with chips and
     rust, brushed chrome, rubber, circuit boards with blinking LEDs, hazard paint, riveted
@@ -139,13 +140,16 @@ THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
     Placing a corner fires a capsule that lands, pulses, telescopes up, flickers and lights.
     Deleting one changes the boundary at once, and the old post leaves in one of four ways,
     picked at random: it DECOMMISSIONS (beacon goes red, its walls unzip back into the
-    neighbours, the shaft telescopes down and sinks into its base), gets EXTRACTED (a claw
+    neighbours, the shaft telescopes down and sinks into its base, the pistons fold down and the
+    cables unplug and coil up, leaving a clean, powered-down base), gets EXTRACTED (a claw
     drops from the ceiling, clamps it and rips it out through the roof), drops through a
     HATCH (the deck opens, it sinks into the dark and the doors slam shut), or OVERLOADS
     (arcs crawl up it, the bell blows off and the shaft crumples). Whatever base or debris
     is left behind gets salvaged by the robots. Undo brings it straight back.
     A new generator dragged out of a wall hovers until you let go; only then does it grow
-    its floor mount.
+    its floor mount. Changed your mind? Grab it again while the base is still growing (or
+    while it's still re-docking, about 1.4 s) and the half-made base just sinks back in:
+    nothing gets torn off. Same for a freshly fired capsule that hasn't finished landing.
     Each sits on a slide-mount base: you can nudge it a little, and if you let go it stays
     where you left it, off-centre on the base. The shaft only travels on the smooth centre
     of the mount: its tethers draw in and go tight as it moves, and at ~11 cm the mount

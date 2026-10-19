@@ -938,7 +938,11 @@ type genPart struct {
 	v   []float32
 }
 
-var genParts []genPart
+var (
+	genParts    []genPart
+	genPartKeys []any
+	genPartsVer int // bumps only when the set of static pieces changes
+)
 
 func endGenFrame() {
 	sort.Strings(plateFrameKeys) // plates come out of a map in random order
@@ -962,6 +966,17 @@ func endGenFrame() {
 		if v := chunkCache[k]; len(v) > 0 {
 			genParts = append(genParts, genPart{k, v})
 		}
+	}
+	same := len(genParts) == len(genPartKeys)
+	for i := 0; same && i < len(genParts); i++ {
+		same = genParts[i].key == genPartKeys[i]
+	}
+	if !same {
+		genPartKeys = genPartKeys[:0]
+		for _, p := range genParts {
+			genPartKeys = append(genPartKeys, p.key)
+		}
+		genPartsVer++
 	}
 	genVer++
 }

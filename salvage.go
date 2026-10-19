@@ -581,7 +581,7 @@ func drawCarriedBase(ob *oldBase, c vec3, f vec3) {
 		drawBittenPlate(c, f, ob.bites, 0, 2*math.Pi, true)
 	} else {
 		baseLift = c.y
-		genBaseGeom(pt2{c.x, c.z}, pt2{c.x, c.z}, 1, true, 0, f)
+		oldBaseGeom(ob, pt2{c.x, c.z}, f)
 		baseLift = 0
 	}
 	shadowBlob(pt2{c.x, c.z}, 0.32, 0.35)
@@ -748,6 +748,7 @@ func (e *editor) nextDebris(r *robot) bool {
 
 func (e *editor) drawOldBases() {
 	t := fxTime()
+	drawRetracts()
 	e.updateDebris(frameDT)
 	live := oldBases[:0]
 	for _, ob := range oldBases {
@@ -763,7 +764,7 @@ func (e *editor) drawOldBases() {
 				drawBittenPlate(fl(ob.pos, 0), ob.ax, ob.bites, 0, 2*math.Pi, true)
 			} else {
 				// still part of a shared slab until the robot cuts it free
-				genBaseGeom(ob.pos, ob.pos, 1, true, 0, ob.ax, oldJointNbrs[ob]...)
+				oldBaseGeom(ob, ob.pos, ob.ax, oldJointNbrs[ob]...)
 			}
 			e.drawKerf(ob)
 			shadowBlob(ob.pos, 0.35, 0.4)
@@ -800,6 +801,9 @@ func (e *editor) drawOldBases() {
 		pos := fl(ob.pos, 0.08)
 		if ob.state == 2 && ob.carrier != nil {
 			pos = fl(ob.carrier.pos, 0.6)
+		}
+		if ob.intact && ob.state == 0 {
+			continue // shut down cleanly: nothing smoulders
 		}
 		if rand.Float64() < frameDT*smokeRate {
 			spawnSmoke(pos, 1)

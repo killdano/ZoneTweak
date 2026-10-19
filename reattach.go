@@ -72,6 +72,8 @@ func toLocal(ob *oldBase, p pt2) pt2 {
 
 // try to re-dock or shear an old base when a ripped shaft is planted at p
 // returns true if it re-docked (no new base grows)
+var lastDocked *oldBase
+
 func (e *editor) plantNearOld(p pt2, ax vec3) (docked bool, anchor pt2, oax vec3, shearObs []*oldBase) {
 	var best *oldBase
 	bd := math.Inf(1)
@@ -90,6 +92,7 @@ func (e *editor) plantNearOld(p pt2, ax vec3) (docked bool, anchor pt2, oax vec3
 	if bd < redockDist && ob.state == 0 && ob.biteR == 0 {
 		ob.gone = true
 		e.releaseClaim(ob)
+		lastDocked = ob
 		return true, ob.pos, ob.ax, nil
 	}
 	// every old base the new one would overlap gets sheared when the new base grows into it

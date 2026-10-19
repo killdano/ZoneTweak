@@ -178,6 +178,8 @@ type renderer struct {
 	vao                                                                             uint32
 	vbos                                                                            map[any]uint32
 	shadowFBO, shadowTex                                                            [2]uint32
+	shadowCacheFBO, shadowCacheTex                                                  [2]uint32
+	shadowCacheKey                                                                  [2]shadowKey
 	shadowRes                                                                       int32
 	hdr2, fogT                                                                      rtex
 	bloom                                                                           []rtex
@@ -321,6 +323,9 @@ func (r *renderer) setQuality(qi int) {
 			glDeleteFramebuffersP, glDeleteRenderbuffersP = glProc("glDeleteFramebuffers"), glProc("glDeleteRenderbuffers")
 		}
 		delOne(glDeleteFramebuffersP, r.shadowFBO[i])
+		delOne(glDeleteTexturesP, r.shadowCacheTex[i])
+		delOne(glDeleteFramebuffersP, r.shadowCacheFBO[i])
+		r.shadowCacheKey[i] = shadowKey{}
 	}
 	r.makeShadowMaps()
 	for t, p := range posts {
@@ -352,8 +357,24 @@ func (r *renderer) makeShadowMaps() {
 			log.Printf("shadow map %d incomplete (0x%x)", i, s)
 		}
 		r.shadowFBO[i] = f
+		// the static part of each shadow map (room + resting generators), rendered only when
+		// that geometry or the lamp changes and copied in before the moving things each frame
+		ct := newTex(r.shadowRes, r.shadowRes, glDepthComponent24, glDepthComponent, glUnsignedInt, glNearest)
+		cf := genOne(glGenFramebuffersP)
+		call(glBindFramebufferP, glFramebuffer, uintptr(cf))
+		call(glFramebufferTexture2DP, glFramebuffer, glDepthAttachment, glTexture2D, uintptr(ct), 0)
+		call(opengl32.NewProc("glDrawBuffer").Addr(), 0)
+		call(opengl32.NewProc("glReadBuffer").Addr(), 0)
+		r.shadowCacheTex[i], r.shadowCacheFBO[i] = ct, cf
+		r.shadowCacheKey[i] = shadowKey{}
 	}
 	call(glBindFramebufferP, glFramebuffer, 0)
+}
+
+type shadowKey struct {
+	static, gen int
+	vp          mat4
+	ok          bool
 }
 
 type postSet struct {
@@ -564,8 +585,19 @@ func (r *renderer) beginFrame(cam vec3) int {
 		}
 		call(glUseProgramP, uintptr(r.shadow.id))
 		r.shadow.m4("u_vp", s.vp)
-		drawB(&bStatic, glTriangles)
-		drawGenParts()
+		key := shadowKey{static: r.staticVer, gen: genPartsVer, vp: s.vp, ok: true}
+		if r.shadowCacheKey[i] != key {
+			r.shadowCacheKey[i] = key
+			call(glBindFramebufferP, glFramebuffer, uintptr(r.shadowCacheFBO[i]))
+			call(glClearP, glDepthBufferBit)
+			drawB(&bStatic, glTriangles)
+			drawGenParts()
+		}
+		call(glBindFramebufferP, glReadFramebuffer, uintptr(r.shadowCacheFBO[i]))
+		call(glBindFramebufferP, glDrawFramebuffer, uintptr(r.shadowFBO[i]))
+		sr := uintptr(r.shadowRes)
+		call(glBlitFramebufferP, 0, 0, sr, sr, 0, 0, sr, sr, glDepthBufferBit, glNearest)
+		call(glBindFramebufferP, glFramebuffer, uintptr(r.shadowFBO[i]))
 		drawB(&bEnv, glTriangles)
 	}
 	return n
@@ -641,10 +673,23 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 	r.lit.f1("u_alphaMode", 0)
 	r.lit.m4("u_vp", vpm)
 	if r.q.mirror {
+		// the reflection is seen dimmed through the wet deck: plain materials and the nearest
+		// lights are plenty for it
+		r.lit.f1("u_cheap", 1)
+		if nl > 12 {
+			r.lit.i1("u_nL", 12)
+		}
 		drawB(&bStatic, glTriangles)
 		drawGenParts()
 		drawB(&bEnv, glTriangles)
 		r.drawGlowPass(vpm, false)
+		call(glUseProgramP, uintptr(r.lit.id))
+		cheap := float32(0)
+		if r.q.potato() {
+			cheap = 1
+		}
+		r.lit.f1("u_cheap", cheap)
+		r.lit.i1("u_nL", nl)
 	}
 
 	call(glEnableP, glBlend)
