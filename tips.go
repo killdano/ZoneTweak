@@ -48,16 +48,42 @@ var buttonTips = []struct{ prefix, tip string }{
 	{"LOCK PLAY AREA", "Locks the play area so its floor handles can't be grabbed by accident. Same as clicking the padlock on the floor."},
 }
 
+// under SteamVR: the tips that differ in more than the name
+var steamTips = []struct {
+	label, tip string
+	exact      bool
+}{
+	{"SAVE & EXIT", "Saves everything and closes ZoneTweak. SteamVR already shows what you saved.", true},
+	{"SAVE", "Writes the boundary, play center and play area to SteamVR's chaperone file and reloads it in SteamVR straight away.", true},
+	{"EXIT", "Close ZoneTweak. Asks first if you have unsaved changes.", true},
+	{"ZONE SETTINGS", "How close you can get before SteamVR's chaperone fades in, a live proximity test, and showing or hiding the chaperone.", false},
+	{"STEAMVR DEFAULT", "Removes ZoneTweak's fade distance so SteamVR goes back to its own built-in value.", false},
+	{"CHAPERONE", "Shows or hides SteamVR's chaperone everywhere. OFF means no warning at all near walls.", false},
+}
+
 func tipFor(label string) string {
-	if strings.HasSuffix(label, ")") && strings.Contains(label, " (") {
-		return "Loads this saved space and writes it to Pimax. The number is how many corners it has."
-	}
-	for _, t := range buttonTips {
-		if strings.HasPrefix(label, t.prefix) {
-			return t.tip
+	if steamMode() {
+		for _, t := range steamTips {
+			if label == t.label || (!t.exact && strings.HasPrefix(label, t.label)) {
+				return t.tip
+			}
 		}
 	}
-	return ""
+	tip := ""
+	if strings.HasSuffix(label, ")") && strings.Contains(label, " (") {
+		tip = "Loads this saved space and writes it to Pimax. The number is how many corners it has."
+	} else {
+		for _, t := range buttonTips {
+			if strings.HasPrefix(label, t.prefix) {
+				tip = t.tip
+				break
+			}
+		}
+	}
+	if steamMode() {
+		tip = strings.ReplaceAll(strings.ReplaceAll(tip, "Pimax's safety zone", "SteamVR's chaperone"), "Pimax", "SteamVR")
+	}
+	return tip
 }
 
 func wrapText(s string, width int) []string {

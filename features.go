@@ -5,10 +5,9 @@ package main
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 )
-
-const assumedWarnDist = 0.5
 
 var (
 	cWarn   = rgba{1.00, 0.55, 0.15, 1}
@@ -18,10 +17,10 @@ var (
 )
 
 func (e *editor) warnDist() (float64, bool) {
-	if v, ok := e.prof.warnDistance(); ok {
+	if v, ok := e.zone.warnDistance(); ok {
 		return v, true
 	}
-	return assumedWarnDist, false
+	return e.zone.defaultDist(), false
 }
 
 func (e *editor) proximityLevel() float64 {
@@ -112,9 +111,9 @@ func (e *editor) handleWarnLine(h *hand, c pt2) bool {
 		if !h.held(bitTrigger) {
 			h.lineGrab = false
 			d := math.Max(warnDistMin, math.Min(warnDistMax, distToBoundary(e.pts, c)))
-			nv, err := e.prof.setWarnDistance(d, false)
+			nv, err := e.zone.setWarnDistance(d, false)
 			if err != nil {
-				e.say("Couldn't write Pimax settings: %v", err)
+				e.say("Couldn't write %s settings: %v", e.zone.sysName(), err)
 			} else {
 				e.say("Warning distance %.2f M saved", nv)
 			}
@@ -169,8 +168,8 @@ func (e *editor) drawProximity(level float64) {
 		bTrans.quad(fl(a, 0), fl(b, 0), fl(b, 0.04), fl(a, 0.04), col.alpha(0.25))
 	}
 	label := fmt.Sprintf("WARNING DISTANCE %s", e.fmtLen(d))
-	if _, ok := e.prof.warnDistance(); !ok {
-		label += " (PIMAX DEFAULT, ASSUMED)"
+	if _, ok := e.zone.warnDistance(); !ok {
+		label += " (" + strings.ToUpper(e.zone.sysName()) + " DEFAULT, ASSUMED)"
 	}
 	if len(in) > 0 {
 		mid := fl(pt2{(in[0][0] + in[1%len(in)][0]) / 2, (in[0][1] + in[1%len(in)][1]) / 2}, 0.35)

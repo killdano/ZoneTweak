@@ -101,6 +101,7 @@ type xrState struct {
 	event                                  *xrEventBuffer
 	dstFBO                                 uint32
 	hasMask                                bool
+	runtimeName                            string
 	waited                                 time.Duration // time this frame spent blocked in the runtime
 	mask                                   [2][]float32  // hidden-area triangles per eye, view space
 	maskVer                                int
@@ -204,7 +205,12 @@ func xrInit() error {
 	setName(ci.app.engineName[:], "none")
 	ci.app.apiVersion = 1 << 48
 	if err := xok(xcall("xrCreateInstance", uintptr(unsafe.Pointer(ci)), uintptr(unsafe.Pointer(&xs.inst))), "xrCreateInstance"); err != nil {
-		return fmt.Errorf("%w. Is Pimax set as the active OpenXR runtime?", err)
+		return fmt.Errorf("%w. Is Pimax or SteamVR set as the active OpenXR runtime?", err)
+	}
+	var ip xrInstanceProperties
+	ip.typ = xrTypeInstanceProperties
+	if xcall("xrGetInstanceProperties", xs.inst, uintptr(unsafe.Pointer(&ip))) >= 0 {
+		xs.runtimeName = cName(ip.runtimeName[:])
 	}
 	runtime.KeepAlive(ext)
 	runtime.KeepAlive(vmExt)

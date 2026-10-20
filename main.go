@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -102,6 +104,8 @@ type editor struct {
 	st                           *store
 	lib                          spaceLib
 	prof                         *pimaxProfile
+	zone                         zoneCfg
+	liveFailed                   atomic.Bool
 	matching                     bool
 	matchHand                    *hand
 	matchAdj0                    rigid2
@@ -240,15 +244,58 @@ func (e *editor) loadFromStore() {
 	e.releaseAll()
 }
 
-func writeBoundary(st *store, pts []pt2, h float64) (int, error) {
+// writeBoundary saves into every file holding the universe; steam and pimax say whose files those were
+func writeBoundary(st *store, pts []pt2, h float64) (n int, steam, pimax bool, err error) {
 	written, skipped, err := st.save(pts, h, 0)
 	for _, w := range written {
 		log.Println("wrote", w)
+		if isPimaxFile(w) {
+			pimax = true
+		} else {
+			steam = true
+		}
 	}
 	for _, s := range skipped {
 		log.Println("skipped", s)
 	}
-	return len(written), err
+	return len(written), steam, pimax, err
+}
+
+// SteamVR work runs one call at a time off the render thread; results come back as status messages
+var (
+	steamJobs = make(chan func(), 16)
+	asyncSay  = make(chan string, 16)
+)
+
+func steamWorker() {
+	for j := range steamJobs {
+		j()
+	}
+}
+
+func queueSteam(j func()) {
+	select {
+	case steamJobs <- j:
+	default:
+		log.Println("SteamVR queue full, dropped a call")
+	}
+}
+
+func (e *editor) applySteamVR(quiet bool) {
+	queueSteam(func() {
+		err := steamvrReload()
+		log.Printf("SteamVR reload: %v", err)
+		switch {
+		case err == nil:
+			e.liveFailed.Store(false)
+			if !quiet {
+				asyncSay <- "SteamVR updated live"
+			}
+		case !quiet:
+			e.liveFailed.Store(true)
+			asyncSay <- fmt.Sprintf("Saved, but SteamVR didn't reload it (%v). Restart SteamVR to apply", err)
+		}
+	})
 }
 
 func (e *editor) save() bool {
@@ -262,7 +309,7 @@ func (e *editor) save() bool {
 		a := e.area
 		e.st.newArea = &a
 	}
-	n, err := writeBoundary(e.st, e.pts, e.height)
+	n, steamW, _, err := writeBoundary(e.st, e.pts, e.height)
 	if err != nil {
 		e.st.newStand, e.st.newArea = nil, nil
 		e.say("Save failed: %v", err)
@@ -275,7 +322,14 @@ func (e *editor) save() bool {
 	e.orig = clonePts(e.pts)
 	e.dirty = false
 	e.savedAny = true
-	e.say("Saved to %d file(s). Restart Pimax to apply", n)
+	if steamMode() {
+		e.say("Saved to %d file(s). Applying in SteamVR", n)
+	} else {
+		e.say("Saved to %d file(s). Restart Pimax to apply", n)
+	}
+	if steamW {
+		e.applySteamVR(!steamMode())
+	}
 	return true
 }
 
@@ -293,7 +347,11 @@ func (e *editor) useSpace(p playSpace) {
 	}
 	if e.save() {
 		e.lib.setActive(p.Name)
-		e.say("Using %s. Restart Pimax to apply", p.Name)
+		if steamMode() {
+			e.say("Using %s. Applying in SteamVR", p.Name)
+		} else {
+			e.say("Using %s. Restart Pimax to apply", p.Name)
+		}
 	}
 }
 
@@ -417,13 +475,18 @@ func (e *editor) buildPages() {
 					log.Println("restoring from", from)
 					e.setPts(P, fmt.Sprintf("Restored %d points from backup. Save to keep", len(P)))
 				}},
-				{label: func() string { return "SAVE & RESTART PIMAX" }, act: func() {
+				{label: func() string {
+					if steamMode() {
+						return "SAVE & EXIT"
+					}
+					return "SAVE & RESTART PIMAX"
+				}, act: func() {
 					if e.dirty || e.centerDirty || e.areaDirty {
 						if !e.save() {
 							return
 						}
 					}
-					e.restartAfter = true
+					e.restartAfter = !steamMode()
 					e.quit = true
 				}},
 				{label: func() string { return "EXIT" }, act: func() {
@@ -444,7 +507,7 @@ func (e *editor) buildPages() {
 			if act == "" {
 				act = "NONE YET"
 			}
-			return []string{"SAVED SPACES   ACTIVE: " + act, "PICK ONE TO WRITE IT TO PIMAX. SAVE AS NEW STORES WHAT YOU SEE NOW"}
+			return []string{"SAVED SPACES   ACTIVE: " + act, "PICK ONE TO WRITE IT TO " + strings.ToUpper(boundarySys) + ". SAVE AS NEW STORES WHAT YOU SEE NOW"}
 		},
 		buttons: func() []button {
 			var bs []button
@@ -512,23 +575,29 @@ func (e *editor) buildPages() {
 	}
 
 	distLabel := func() string {
-		if v, ok := e.prof.warnDistance(); ok {
+		if v, ok := e.zone.warnDistance(); ok {
 			if e.feet {
 				return fmt.Sprintf("%.1f FT", v*3.28084)
 			}
 			return fmt.Sprintf("%.2f M", v)
 		}
-		return "PIMAX DEFAULT"
+		return strings.ToUpper(e.zone.sysName()) + " DEFAULT"
+	}
+	zoneName := func() string {
+		if steamMode() {
+			return "CHAPERONE"
+		}
+		return "SAFETY ZONE"
 	}
 	nudge := func(d float64) func() {
 		return func() {
-			v, ok := e.prof.warnDistance()
+			v, ok := e.zone.warnDistance()
 			if !ok {
-				v = 0.5
+				v = e.zone.defaultDist()
 			}
-			nv, err := e.prof.setWarnDistance(v+d, false)
+			nv, err := e.zone.setWarnDistance(v+d, false)
 			if err != nil {
-				e.say("Couldn't write Pimax settings: %v", err)
+				e.say("Couldn't write %s settings: %v", e.zone.sysName(), err)
 				return
 			}
 			e.say("Warning distance %.2f M saved", nv)
@@ -613,7 +682,7 @@ func (e *editor) buildPages() {
 
 	e.pageZone = &page{cols: 2, keyH: 0.056,
 		header: func() []string {
-			return []string{"SAFETY ZONE SETTINGS", "WARNING DISTANCE " + distLabel() + "   ZONE " + onoff(e.prof.zoneOn())}
+			return []string{zoneName() + " SETTINGS", "WARNING DISTANCE " + distLabel() + "   " + zoneName() + " " + onoff(e.zone.zoneOn())}
 		},
 		buttons: func() []button {
 			return []button{
@@ -621,21 +690,21 @@ func (e *editor) buildPages() {
 				{label: func() string { return "FARTHER +10 CM" }, act: nudge(0.10)},
 				{label: func() string { return "CLOSER -2 CM" }, act: nudge(-0.02)},
 				{label: func() string { return "FARTHER +2 CM" }, act: nudge(0.02)},
-				{label: func() string { return "PIMAX DEFAULT" }, act: func() {
-					if _, err := e.prof.setWarnDistance(0, true); err != nil {
-						e.say("Couldn't write Pimax settings: %v", err)
+				{label: func() string { return strings.ToUpper(e.zone.sysName()) + " DEFAULT" }, act: func() {
+					if _, err := e.zone.setWarnDistance(0, true); err != nil {
+						e.say("Couldn't write %s settings: %v", e.zone.sysName(), err)
 						return
 					}
-					e.say("Warning distance back to Pimax default")
+					e.say("Warning distance back to %s default", e.zone.sysName())
 				}},
-				{label: func() string { return "SAFETY ZONE: " + onoff(e.prof.zoneOn()) }, act: func() {
-					on := !e.prof.zoneOn()
-					if err := e.prof.setZoneOn(on); err != nil {
-						e.say("Couldn't write Pimax settings: %v", err)
+				{label: func() string { return zoneName() + ": " + onoff(e.zone.zoneOn()) }, act: func() {
+					on := !e.zone.zoneOn()
+					if err := e.zone.setZoneOn(on); err != nil {
+						e.say("Couldn't write %s settings: %v", e.zone.sysName(), err)
 						return
 					}
-					e.say("Safety zone %s", onoff(on))
-				}, on: func() bool { return e.prof.zoneOn() }},
+					e.say("%s %s", zoneName(), onoff(on))
+				}, on: func() bool { return e.zone.zoneOn() }},
 				{label: func() string { return "PROXIMITY TEST: " + onoff(e.proxTest) }, act: func() {
 					e.proxTest = !e.proxTest
 					if e.proxTest {
@@ -1617,16 +1686,36 @@ func cliUse(name string, lib spaceLib) {
 	if p.Frame == "raw" {
 		pts = st.toStageAll(pts)
 	}
-	n, err := writeBoundary(st, pts, p.Height)
+	n, steamW, pimaxW, err := writeBoundary(st, pts, p.Height)
 	if err != nil {
 		fail("Couldn't write the boundary: " + err.Error())
 	}
 	lib.setActive(p.Name)
 	log.Printf("used %s on universe %s, %d files", p.Name, st.uniID, n)
-	askRestart(fmt.Sprintf("%s is now the boundary (universe %s, %d files).", p.Name, st.uniID, n))
+	msg := fmt.Sprintf("%s is now the boundary (universe %s, %d files).", p.Name, st.uniID, n)
+	if steamW {
+		err := steamvrReload()
+		log.Printf("SteamVR reload: %v", err)
+		switch {
+		case err == nil:
+			msg += "\n\nSteamVR updated it live."
+		case errors.Is(err, errNoSteamVR):
+			msg += "\n\nSteamVR picks it up next time it starts."
+		default:
+			msg += fmt.Sprintf("\n\nSteamVR didn't reload it (%v). Restart SteamVR to apply.", err)
+		}
+	}
+	if pimaxW {
+		askRestart(msg)
+	} else {
+		info(msg)
+	}
 }
 
 func main() {
+	if code, ok := steamvrMain(os.Args); ok {
+		os.Exit(code)
+	}
 	runtime.LockOSThread()
 	exe, _ := os.Executable()
 	dir := filepath.Dir(exe)
@@ -1637,6 +1726,8 @@ func main() {
 	log.SetFlags(log.Ltime)
 	ed.lib = spaceLib{dir: filepath.Join(dir, "spaces")}
 	ed.prof = newPimaxProfile()
+	ed.zone = ed.prof
+	go steamWorker()
 	ed.prof.onSet = func(key string, v float64, isFloat bool) {
 		if isFloat {
 			piSetFloat(key, v)
@@ -1678,6 +1769,29 @@ func main() {
 		fail(err.Error())
 	}
 	defer xrShutdown()
+	if strings.Contains(strings.ToLower(xs.runtimeName), "steamvr") {
+		boundarySys = "SteamVR"
+		ed.zone = newSteamZone(configDirs(), func(key, kind string, v float64) error {
+			queueSteam(func() {
+				if err := steamvrSet(key, kind, v); err != nil {
+					asyncSay <- fmt.Sprintf("Couldn't change the SteamVR setting: %v", err)
+				}
+			})
+			return nil
+		})
+	}
+	log.Printf("OpenXR runtime %q, boundary owner %s", xs.runtimeName, boundarySys)
+	if steamMode() {
+		// edit whatever SteamVR is using now: nobody should have to pick a universe
+		live, err := steamvrLive()
+		log.Printf("SteamVR live bounds: %d points, %v", len(live), err)
+		if id := st.steamUniverse(live); id != "" && id != st.uniID {
+			if err := st.selectUniverse(id); err == nil {
+				ed.loadFromStore()
+				log.Printf("switched to SteamVR's universe %s, %d points, writes %v", id, len(st.pts), st.uniFiles)
+			}
+		}
+	}
 	qi := loadQuality(dir)
 	qualityIdx, appDir = qi, dir
 	rr, err := newRenderer(qi)
@@ -1699,9 +1813,9 @@ func main() {
 	xs.onStageMoved = func(m hmdMatrix34) {
 		oldFromNew := rigid2{a: float64(m[0][0]), b: float64(m[0][2]), c: float64(m[2][0]), d: float64(m[2][2]), tx: float64(m[0][3]), tz: float64(m[2][3])}
 		ed.applyStageMove(oldFromNew.inv())
-		ed.say("Pimax recentered. Boundary kept in place")
+		ed.say("%s recentered. Boundary kept in place", boundarySys)
 	}
-	ed.say("Universe %s, %d points. B opens the menu", st.uniID, len(st.pts))
+	ed.say("%s boundary, universe %s, %d points. B opens the menu", boundarySys, st.uniID, len(st.pts))
 
 	hands := []*hand{{idx: 0, grab: -1, hoverV: -1, hoverE: -1, btn: -1}, {idx: 1, grab: -1, hoverV: -1, hoverE: -1, btn: -1}}
 	ed.hands = hands
@@ -1787,6 +1901,11 @@ func main() {
 			}
 		}
 		wantQuality, wantRebuild = -1, false
+		select {
+		case m := <-asyncSay:
+			ed.say("%s", m)
+		default:
+		}
 		cpu0 := time.Now()
 		xs.waited = 0
 		ed.cur = ed.page.buttons()
@@ -1805,6 +1924,10 @@ func main() {
 	xrShutdown()
 	log.Println("exit")
 	switch {
+	case steamMode():
+		if ed.savedAny && ed.liveFailed.Load() {
+			info("Your changes are saved. SteamVR didn't take them live, so restart SteamVR to apply them.")
+		}
 	case ed.restartAfter:
 		restartPimax()
 	case ed.savedAny || ed.prof.changed:

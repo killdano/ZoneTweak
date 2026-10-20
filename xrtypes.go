@@ -16,6 +16,15 @@ type xrApplicationInfo struct {
 	apiVersion    uint64
 }
 
+const xrTypeInstanceProperties = 32
+
+type xrInstanceProperties struct {
+	typ            int32
+	next           uintptr
+	runtimeVersion uint64
+	runtimeName    [128]byte
+}
+
 type xrInstanceCreateInfo struct {
 	typ         int32
 	next        uintptr

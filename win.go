@@ -98,6 +98,10 @@ func messageBox(title, text string) {
 	pMessageBoxW.Call(0, uintptr(unsafe.Pointer(wstr(text))), uintptr(unsafe.Pointer(wstr(title))), 0x10)
 }
 
+func info(msg string) {
+	pMessageBoxW.Call(0, uintptr(unsafe.Pointer(wstr(msg))), uintptr(unsafe.Pointer(wstr("ZoneTweak"))), 0x40|0x40000)
+}
+
 func wndProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 	switch msg {
 	case 0x0010:

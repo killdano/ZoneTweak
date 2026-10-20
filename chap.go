@@ -470,3 +470,64 @@ func (s *store) oldestBackup() ([]pt2, string, error) {
 	}
 	return nil, "", errors.New("no backup has this universe")
 }
+
+func isPimaxFile(path string) bool {
+	return strings.Contains(strings.ToLower(filepath.ToSlash(path)), "/pimax/")
+}
+
+// shapeDiff compares two outlines without caring where they sit or which way they face:
+// the same number of corners, the same edge lengths and the same area
+func shapeDiff(a, b []pt2) float64 {
+	if len(a) != len(b) || len(a) < 3 {
+		return math.Inf(1)
+	}
+	edges := func(P []pt2) []float64 {
+		out := make([]float64, len(P))
+		for i, p := range P {
+			q := P[(i+1)%len(P)]
+			out[i] = math.Hypot(q[0]-p[0], q[1]-p[1])
+		}
+		sort.Float64s(out)
+		return out
+	}
+	ea, eb := edges(a), edges(b)
+	d := 0.0
+	for i := range ea {
+		d = math.Max(d, math.Abs(ea[i]-eb[i]))
+	}
+	return math.Max(d, math.Abs(math.Abs(polyArea(a))-math.Abs(polyArea(b))))
+}
+
+// steamUniverse: the universe SteamVR is using now. It's the one in SteamVR's own file whose
+// bounds match the live chaperone; failing that, the most recently changed one in that file.
+func (s *store) steamUniverse(live []pt2) string {
+	best, bestD := "", math.Inf(1)
+	newest, newestT := "", ""
+	for _, id := range s.ids {
+		for _, f := range s.unis[id].files {
+			if isPimaxFile(f) {
+				continue
+			}
+			doc, err := readJSON(f)
+			if err != nil {
+				continue
+			}
+			u := findUniverse(doc, id)
+			if u == nil {
+				continue
+			}
+			if p, _ := boundsOf(u); len(live) >= 3 {
+				if d := shapeDiff(p, live); d < bestD {
+					best, bestD = id, d
+				}
+			}
+			if t := fmt.Sprint(u["time"]); newest == "" || t > newestT {
+				newest, newestT = id, t
+			}
+		}
+	}
+	if best != "" && bestD < 0.05 {
+		return best
+	}
+	return newest
+}

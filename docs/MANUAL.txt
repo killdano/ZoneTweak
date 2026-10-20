@@ -1,13 +1,25 @@
-ZONETWEAK — for Pimax Lighthouse
-In-headset editor for the Pimax safety zone (green boundary) (C:\ProgramData\Pimax\runtime\chaperone_info*.vrchap).
-Runs on OpenXR, so it works with whichever OpenXR runtime is active: Pimax's own or SteamVR.
+ZONETWEAK — for Pimax and SteamVR
+In-headset editor for your VR boundary: the Pimax safety zone
+(C:\ProgramData\Pimax\runtime\chaperone_info*.vrchap) or the SteamVR chaperone
+(Steam\config\chaperone_info.vrchap). It edits whichever one is active: the boundary of the
+OpenXR runtime ZoneTweak runs in. There's nothing to choose.
 
 RUN
   Start Pimax Play / Evo with the headset on, then run ZoneTweak.exe once from Windows.
   The first run adds ZoneTweak to Pimax's app library, so after that you can launch it
   from inside VR like any other Pimax app.
-  Keep openxr_loader.dll next to it. A desktop window mirrors the left eye.
+  Keep openxr_loader.dll and openvr_api.dll next to it. A desktop window mirrors the left eye.
   Problems go to zonetweak.log in this folder.
+
+STEAMVR HEADSETS (Index, Vive, Bigscreen Beyond, Pimax through SteamVR...)
+  Set SteamVR as the OpenXR runtime (SteamVR settings -> OpenXR) and start ZoneTweak with
+  SteamVR running. It opens the universe SteamVR is using right now, matched against the
+  live chaperone, so you always edit the boundary you actually see.
+  SAVE writes SteamVR's chaperone file (with a .bak first, as always) and makes SteamVR
+  reload it on the spot: no restart. ZONE SETTINGS changes SteamVR's own chaperone
+  settings live: the warning distance is SteamVR's fade distance, and the switch shows or
+  hides the chaperone. SAVE & RESTART PIMAX becomes SAVE & EXIT.
+  These SteamVR calls go through Valve's openvr_api.dll (keep it next to the exe).
 
 CONTROLS (either hand)
   Trackpad press (Index) ....... switch tool: FLOOR beam <-> LASER pointer (with transform)
