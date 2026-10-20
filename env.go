@@ -45,7 +45,7 @@ var (
 const envH = 5.2
 
 func (e *editor) buildEnvironment() {
-	if !envHave || !e.manipulating() {
+	if !envHave || (!e.manipulating() && !slideActive()) {
 		g, x0, x1, z0, z1 := e.roomFrame()
 		box := [4]float64{x0, x1, z0, z1}
 		switch {
@@ -636,6 +636,10 @@ func (e *editor) animateEnv() {
 		d := l.b.sub(l.a)
 		L := d.length()
 		fl := flickerOf(l, t)
+		if slideActive() {
+			l.a, l.b = slideMap(l.a), slideMap(l.b)
+			d = l.b.sub(l.a)
+		}
 		near := l.a.sub(cam).length() < 12
 		switch l.kind {
 		case 0:

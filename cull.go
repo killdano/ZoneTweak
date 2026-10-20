@@ -300,3 +300,32 @@ func rateMap(proj *mat4, w, h, tw, th int, in, mid float64) ([]uint8, int, int) 
 	}
 	return out, nx, ny
 }
+
+// ---- cell wall pushing (see wallpush.go) ----
+
+const (
+	wallMargin = 2.6  // the walls stand this far outside the boundary's bounding box
+	wallClear  = 0.9  // how close a post's centre gets to a wall face
+	wallDepth  = 0.55 // how far the wall's fittings stick into the room
+	resistR    = 0.1  // how far past the stop the post can be shoved before it holds
+	breakPush  = 0.35 // how far the hand has to push past the stop to move the wall
+	slideDur   = 1.6
+)
+
+// slideEdge maps one room-frame coordinate for one wall that moved from old to nw (sgn +1 for
+// a max-side wall, -1 for a min-side one) at slide progress k
+func slideEdge(u, old, nw, sgn, k float64) float64 {
+	u, old, nw = u*sgn, old*sgn, nw*sgn
+	d := nw - old
+	if d > 1e-4 {
+		a, b := old-wallDepth, nw-wallDepth
+		switch {
+		case u <= a:
+		case u < b:
+			u = a + (u-a)*k
+		default:
+			u -= d * (1 - k)
+		}
+	}
+	return u * sgn
+}

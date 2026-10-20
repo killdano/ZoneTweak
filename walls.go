@@ -836,7 +836,7 @@ func shaftCollar(c vec3) {
 }
 
 // pistonPin / tetherPort: where a base slot's piston and tether lock onto the collar
-func pistonPin(s, d vec3) vec3 { return s.add(d.mul(collarR + 0.026)).add(v3(0, collarY, 0)) }
+func pistonPin(s, d vec3) vec3  { return s.add(d.mul(collarR + 0.026)).add(v3(0, collarY, 0)) }
 func tetherPort(s, d vec3) vec3 { return s.add(d.mul(collarR + 0.03)).add(v3(0, collarY, 0)) }
 
 // collarBrackets: the clevis lugs and tether sockets on the collar, lined up with the base's slots

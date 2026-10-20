@@ -21,6 +21,8 @@ var buttonTips = []struct{ prefix, tip string }{
 	{"GRAPHICS", "Quality presets, render scale and foveated rendering, with live GPU and CPU timings."},
 	{"RENDER SCALE", "Renders fewer pixels and scales up to the headset. Each step down is roughly 20% less GPU work, a little softer."},
 	{"FOVEATED", "Shades the outer part of each eye at a lower rate, where the lens blurs it anyway. NVIDIA RTX and GTX 16 GPUs."},
+	{"FOVEA SIZE", "How far from the centre of each lens everything stays full quality. Smaller saves more GPU time."},
+	{"EDGES", "How coarse shading gets outside that circle: the fraction of pixels actually shaded, first in a 12 degree ring, then beyond it."},
 	{"OPTIMIZED RENDERING", "OFF draws the way earlier versions did, for comparing GPU time or if something looks wrong."},
 	{"ULTRA", "Best look: 8x anti-aliasing, 4K shadows, full-detail fog, floor reflections."},
 	{"HIGH", "4x anti-aliasing and 2K shadows. Try this first if ULTRA stutters or reprojects."},

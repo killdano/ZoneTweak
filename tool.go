@@ -526,7 +526,7 @@ func (e *editor) handleRayGen(h *hand) bool {
 			h.rf = newPointFilter()
 		}
 		q := h.rf.step(pt2{raw.x, raw.z}, frameDT)
-		e.pts[h.grab] = e.snapped(h.grab, pt2{q[0] + h.grabOff[0], q[1] + h.grabOff[1]})
+		e.pts[h.grab] = e.wallPush(h, e.snapped(h.grab, pt2{q[0] + h.grabOff[0], q[1] + h.grabOff[1]}))
 		e.grabUpdate(h)
 		gp := e.pts[h.grab]
 		h.rayHit, h.rayHitOK = v3(gp[0], math.Max(0.1, math.Min(e.height, raw.y)), gp[1]), true

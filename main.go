@@ -584,6 +584,22 @@ func (e *editor) buildPages() {
 					saveGfx(appDir)
 					e.say("Foveated rendering %s", onoff(foveated))
 				}},
+				{label: func() string { return fmt.Sprintf("FOVEA SIZE %.0f DEG", foveaDeg) }, act: func() {
+					k := 0
+					for i, v := range foveaSizes {
+						if v == foveaDeg {
+							k = i
+						}
+					}
+					foveaDeg = foveaSizes[(k+1)%len(foveaSizes)]
+					saveGfx(appDir)
+					e.say("Full quality within %.0f degrees of the centre", foveaDeg)
+				}},
+				{label: func() string { return "EDGES " + foveaLabels[foveaEdge] }, act: func() {
+					foveaEdge = (foveaEdge + 1) % 3
+					saveGfx(appDir)
+					e.say("Edges shaded at %s rate", strings.ToLower(foveaLabels[foveaEdge]))
+				}},
 				{label: func() string { return "OPTIMIZED RENDERING: " + onoff(perfOpt) }, on: func() bool { return perfOpt }, span: 2, act: func() {
 					perfOpt = !perfOpt
 					wantRebuild = true
@@ -1017,7 +1033,7 @@ func (e *editor) handleHand(h *hand) {
 			e.theta = domAngle(e.pts)
 			haptic(h.idx, 800)
 		} else {
-			e.pts[h.grab] = e.snapped(h.grab, pt2{c[0] + h.grabOff[0], c[1] + h.grabOff[1]})
+			e.pts[h.grab] = e.wallPush(h, e.snapped(h.grab, pt2{c[0] + h.grabOff[0], c[1] + h.grabOff[1]}))
 			e.grabUpdate(h)
 		}
 		return
@@ -1285,6 +1301,7 @@ func (e *editor) buildScene() {
 			e.drawGen(i, p, e.height, e.pts[(i-1+n)%n], e.pts[(i+1)%n], hotV[i], e.wallTint(level, false), genFault[i])
 		}
 		updateMist()
+		e.drawWallPush()
 		e.updateRemovals()
 		e.drawRemovals(e.wallTint(level, false))
 		e.drawOldBases()
@@ -1689,6 +1706,7 @@ func main() {
 	hands := []*hand{{idx: 0, grab: -1, hoverV: -1, hoverE: -1, btn: -1}, {idx: 1, grab: -1, hoverV: -1, hoverE: -1, btn: -1}}
 	ed.hands = hands
 	ed.laserHand = hands[1]
+	ed.laser = true // start with the laser pointer
 	exitRequested := false
 	lastFrame := time.Now()
 	for !xs.quit {

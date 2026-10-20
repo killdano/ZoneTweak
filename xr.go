@@ -102,7 +102,7 @@ type xrState struct {
 	dstFBO                                 uint32
 	hasMask                                bool
 	waited                                 time.Duration // time this frame spent blocked in the runtime
-	mask                                   [2][]float32 // hidden-area triangles per eye, view space
+	mask                                   [2][]float32  // hidden-area triangles per eye, view space
 	maskVer                                int
 }
 

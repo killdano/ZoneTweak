@@ -124,7 +124,10 @@ THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
     The same page has RENDER SCALE (100/90/80/70%: renders fewer pixels and scales the image
     back up to the headset's size; each step down is roughly 20% less GPU work) and FOVEATED
     (NVIDIA RTX / GTX 16 GPUs: the outer part of each eye is shaded at a lower rate, where the
-    lens blurs it anyway; the middle stays full quality). The header shows live timings:
+    lens blurs it anyway; the middle stays full quality). FOVEA SIZE sets how far from the
+    lens centre everything stays full quality (15-40 degrees), EDGES how coarse it gets
+    outside (the fraction of pixels shaded: 1/2 then 1/4, 1/4 then 1/16, or 1/16).
+    ZoneTweak starts on LOW graphics and the laser pointer until you change them. The header shows live timings:
     total GPU and CPU milliseconds per frame and how long each pass takes (shadows,
     reflection, depth prepass, scene, fog, post). They're also written to the log every
     10 seconds.
@@ -166,6 +169,10 @@ THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
     nothing gets torn off. Same for a freshly fired capsule that hasn't finished landing.
     The base's pistons and tethers lock onto a steel slewing collar round the middle of the
     coil housing, so their brackets turn with the base.
+    Drag a post toward the cell walls and it stops a hand's width short: it resists, the
+    controller buzzes harder and the wall glows amber where you're pushing. Keep pushing and
+    the wall gives way: it slides back on its rails with a hiss of steam and a clank, making
+    room. (When you're not looking, the cell still resizes itself to fit your boundary.)
     Each sits on a slide-mount base: you can nudge it a little, and if you let go it stays
     where you left it, off-centre on the base. The shaft only travels on the smooth centre
     of the mount: its tethers draw in and go tight as it moves, and at ~11 cm the mount

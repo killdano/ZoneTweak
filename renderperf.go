@@ -17,25 +17,25 @@ import (
 // doesn't offer what it needs.
 
 const (
-	glR8UI                  = 0x8232
-	glRG32UI                = 0x823C
-	glRedInteger            = 0x8D94
-	glRGInteger             = 0x8228
-	glUnpackAlignment       = 0x0CF5
-	glAlways                = 0x0207
-	glShadingRateImageNV    = 0x9563
-	glShadingRateTexelW     = 0x955C
-	glShadingRateTexelH     = 0x955D
-	glRate1x1NV             = 0x9565
-	glRate2x2NV             = 0x9568
-	glRate4x4NV             = 0x956B
-	glUnsignedIntType       = 0x1405
-	glUnsignedByteType      = 0x1401
-	foveaInner, foveaMiddle = 30.0, 44.0
+	glR8UI               = 0x8232
+	glRG32UI             = 0x823C
+	glRedInteger         = 0x8D94
+	glRGInteger          = 0x8228
+	glUnpackAlignment    = 0x0CF5
+	glAlways             = 0x0207
+	glShadingRateImageNV = 0x9563
+	glShadingRateTexelW  = 0x955C
+	glShadingRateTexelH  = 0x955D
+	glRate1x1NV          = 0x9565
+	glRate2x2NV          = 0x9568
+	glRate1x2NV          = 0x9566
+	glRate4x4NV          = 0x956B
+	glUnsignedIntType    = 0x1405
+	glUnsignedByteType   = 0x1401
 )
 
 var (
-	glTexSubImage2DP, glPixelStoreiP, glGetIntegervP, glColorMaskP uintptr
+	glTexSubImage2DP, glPixelStoreiP, glGetIntegervP, glColorMaskP           uintptr
 	glBindShadingRateImageNVP, glShadingRateImagePaletteNVP, glTexStorage2DP uintptr
 
 	renderScale  = 1.0
@@ -45,6 +45,12 @@ var (
 	vrsTW, vrsTH int32
 	wantRebuild  bool
 	renderScales = []float64{1.0, 0.9, 0.8, 0.7}
+	// foveation: the full-quality circle's radius (degrees from the lens centre) and how much
+	// the outside is cut: 0 HIGH (half rate outside), 1 MEDIUM (half, then quarter), 2 LOW
+	foveaDeg    = 30.0
+	foveaEdge   = 1
+	foveaSizes  = []float64{15, 20, 25, 30, 35, 40}
+	foveaLabels = []string{"1/2 THEN 1/4", "1/4 THEN 1/16", "1/16"} // shading rate outside the circle
 )
 
 func loadPerfGL() {
@@ -116,6 +122,11 @@ func loadGfxOpts(dir string) {
 		if strings.TrimSpace(ln) == "foveated off" {
 			foveated = false
 		}
+		var fd float64
+		var fe int
+		if n, _ := fmt.Sscanf(strings.TrimSpace(ln), "fovea %f %d", &fd, &fe); n == 2 && fd >= 10 && fd <= 60 && fe >= 0 && fe <= 2 {
+			foveaDeg, foveaEdge = fd, fe
+		}
 		if strings.TrimSpace(ln) == "optimized off" {
 			perfOpt = false
 		}
@@ -132,7 +143,7 @@ func saveGfx(dir string) {
 	if !perfOpt {
 		op = "off"
 	}
-	s := fmt.Sprintf("%s\nscale %.2f\nfoveated %s\noptimized %s\n", qualities[qualityIdx].name, renderScale, fv, op)
+	s := fmt.Sprintf("%s\nscale %.2f\nfoveated %s\noptimized %s\nfovea %.0f %d\n", qualities[qualityIdx].name, renderScale, fv, op, foveaDeg, foveaEdge)
 	os.WriteFile(filepath.Join(dir, "spaces", "graphics.txt"), []byte(s), 0644)
 }
 
@@ -148,6 +159,7 @@ type eyeExtras struct {
 	reflMS     *eyeTarget
 	rateTex    uint32
 	rateKey    mat4
+	rateCfg    [2]float64
 	tileHdr    uint32
 	tileIdx    uint32
 	tiles      lightTiles
@@ -214,9 +226,11 @@ func (r *renderer) fovea(t *eyeTarget, ex *eyeExtras, proj mat4) bool {
 	if !vrsOK || !foveated || r.q.potato() {
 		return false
 	}
-	if ex.rateTex == 0 || !nearMat(ex.rateKey, proj) {
+	cfg := [2]float64{foveaDeg, float64(foveaEdge)}
+	if ex.rateTex == 0 || !nearMat(ex.rateKey, proj) || ex.rateCfg != cfg {
+		ex.rateCfg = cfg
 		delOne(glDeleteTexturesP, ex.rateTex)
-		m, nx, ny := rateMap(&proj, int(t.w), int(t.h), int(vrsTW), int(vrsTH), foveaInner, foveaMiddle)
+		m, nx, ny := rateMap(&proj, int(t.w), int(t.h), int(vrsTW), int(vrsTH), foveaDeg, foveaDeg+12)
 		ex.rateTex = genOne(glGenTexturesP)
 		call(glBindTextureP, glTexture2D, uintptr(ex.rateTex))
 		call(glTexStorage2DP, glTexture2D, 1, glR8UI, uintptr(nx), uintptr(ny))
@@ -227,6 +241,12 @@ func (r *renderer) fovea(t *eyeTarget, ex *eyeExtras, proj mat4) bool {
 		ex.rateKey = proj
 	}
 	rates := [3]uint32{glRate1x1NV, glRate2x2NV, glRate4x4NV}
+	switch foveaEdge {
+	case 0:
+		rates = [3]uint32{glRate1x1NV, glRate1x2NV, glRate2x2NV}
+	case 2:
+		rates = [3]uint32{glRate1x1NV, glRate4x4NV, glRate4x4NV}
+	}
 	call(glShadingRateImagePaletteNVP, 0, 0, 3, uintptr(unsafe.Pointer(&rates[0])))
 	call(glBindShadingRateImageNVP, uintptr(ex.rateTex))
 	call(glEnableP, glShadingRateImageNV)
@@ -331,7 +351,7 @@ func (r *renderer) drawStatic(vp *mat4) {
 	}
 	call(glBindBufferP, glArrayBuffer, uintptr(g.vbo))
 	bindAttribs(false)
-	if vp == nil || len(r.staticChunks) == 0 {
+	if vp == nil || len(r.staticChunks) == 0 || slideActive() {
 		call(glDrawArraysP, glTriangles, 0, uintptr(g.n))
 		return
 	}
@@ -354,4 +374,21 @@ func drawGenPartsIn(vp *mat4) {
 		bindAttribs(false)
 		call(glDrawArraysP, glTriangles, 0, uintptr(g.n))
 	}
+}
+
+// setSlide: the wall-slide mapping for the room's vertices (off unless a wall is moving)
+func setSlide(p *prog) {
+	if !slideActive() {
+		p.i1("u_slideOn", 0)
+		return
+	}
+	g := envG
+	p.i1("u_slideOn", 1)
+	p.f3("u_sO", v3(g.tx, 0, g.tz))
+	p.f3("u_sX", v3(g.a, 0, g.c))
+	p.f3("u_sZ", v3(g.b, 0, g.d))
+	o, n := slide.old, slide.new
+	p.f4v("u_sOld", []float32{float32(o[0]), float32(o[1]), float32(o[2]), float32(o[3])})
+	p.f4v("u_sNew", []float32{float32(n[0]), float32(n[1]), float32(n[2]), float32(n[3])})
+	p.f1("u_sK", float32(slideK()))
 }

@@ -396,6 +396,7 @@ type shadowKey struct {
 	static, gen int
 	vp          mat4
 	ok          bool
+	slide       float32
 }
 
 type postSet struct {
@@ -531,6 +532,7 @@ func drawB(key any, mode uintptr) {
 }
 
 func (r *renderer) setScene(p *prog, cam vec3, lights []float32, nl int) {
+	setSlide(p)
 	p.f1("u_time", float32(fxTime()))
 	cheap := float32(0)
 	if r.q.potato() {
@@ -598,7 +600,11 @@ func (r *renderer) beginFrame(cam vec3) int {
 		}
 		call(glUseProgramP, uintptr(r.shadow.id))
 		r.shadow.m4("u_vp", s.vp)
-		key := shadowKey{static: r.staticVer, gen: genPartsVer, vp: s.vp, ok: true}
+		setSlide(r.shadow)
+		key := shadowKey{static: r.staticVer, gen: genPartsVer, vp: s.vp, ok: true, slide: -1}
+		if slideActive() {
+			key.slide = float32(slideK()) // the room is moving: no reusing the cached shadow
+		}
 		if r.shadowCacheKey[i] != key {
 			r.shadowCacheKey[i] = key
 			call(glBindFramebufferP, glFramebuffer, uintptr(r.shadowCacheFBO[i]))
@@ -745,6 +751,7 @@ func (r *renderer) renderEye(eye int, t *eyeTarget, proj mat4, view hmdMatrix34,
 		call(glColorMaskP, 0, 0, 0, 0)
 		call(glUseProgramP, uintptr(r.depth.id))
 		r.depth.m4("u_vp", vp)
+		setSlide(r.depth)
 		r.drawStatic(cv)
 		drawGenPartsIn(cv)
 		drawB(&bEnv, glTriangles)
@@ -944,7 +951,7 @@ func loadQuality(dir string) int {
 	loadGfxOpts(dir)
 	b, err := os.ReadFile(filepath.Join(dir, "spaces", "graphics.txt"))
 	if err != nil {
-		return 0
+		return 3 // LOW until you pick something
 	}
 	first := strings.TrimSpace(strings.SplitN(string(b), "\n", 2)[0])
 	for i, q := range qualities {
@@ -952,7 +959,7 @@ func loadQuality(dir string) int {
 			return i
 		}
 	}
-	return 0
+	return 3
 }
 
 func saveQuality(dir string, i int) {
