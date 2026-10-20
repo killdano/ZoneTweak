@@ -1078,7 +1078,7 @@ func (e *editor) buildGenerator(p pt2, H float64, prev, next pt2, hot bool, col 
 			}
 		}
 	}
-	e.genGlow(p, H, prev, next, hot, col, fault, 0)
+	e.genGlow(p, H, prev, next, hot, col, fault, 0, anchor, true)
 }
 
 // ---- the energy sheet reacting where something touches it ----
@@ -1380,14 +1380,63 @@ func (e *editor) sideWallPower(gi, side int) float64 {
 	return 1
 }
 
-func (e *editor) genGlow(p pt2, H float64, prev, next pt2, hot bool, col rgba, fault, lift float64) {
+// mist pools: the damp vapour round a planted generator belongs to the spot on the deck,
+// not to the post. It builds up over a few seconds where a base sits, and when the post is
+// torn off or moved the pool it leaves behind thins out and drifts away on its own.
+type mistPool struct {
+	p   pt2
+	k   float64
+	fed bool
+}
+
+var mistPools []*mistPool
+
+func feedMist(p pt2) {
+	for _, m := range mistPools {
+		if dist2(m.p, p) < 0.15 {
+			m.fed = true
+			m.p = pt2{m.p[0] + (p[0]-m.p[0])*0.05, m.p[1] + (p[1]-m.p[1])*0.05}
+			return
+		}
+	}
+	k := 0.0
+	if fxTime() < 3 {
+		k = 1 // already there when the app opens
+	}
+	mistPools = append(mistPools, &mistPool{p: p, k: k, fed: true})
+}
+
+func updateMist() {
 	t := fxTime()
-	// damp vapour pooling round the base, like moisture boiling off the coils
-	addFog(v3(p[0], 0.3, p[1]), 1.05, 0.8+0.2*math.Sin(t*0.4+p[0]*3), 0.45)
-	if rand.Float64() < frameDT*0.5 {
-		a := rand.Float64() * 2 * math.Pi
-		r := 0.15 + rand.Float64()*0.55
-		spawnMist(v3(p[0]+math.Cos(a)*r, 0.08+rand.Float64()*0.35, p[1]+math.Sin(a)*r), 0.4)
+	live := mistPools[:0]
+	for _, m := range mistPools {
+		if m.fed {
+			m.k = math.Min(1, m.k+frameDT/5)
+		} else {
+			m.k -= frameDT / 3.5
+		}
+		m.fed = false
+		if m.k <= 0 {
+			continue
+		}
+		live = append(live, m)
+		p := m.p
+		addFog(v3(p[0], 0.3, p[1]), 1.05*(0.6+0.4*m.k), m.k*(0.8+0.2*math.Sin(t*0.4+p[0]*3)), 0.45)
+		if rand.Float64() < frameDT*0.5*m.k {
+			a := rand.Float64() * 2 * math.Pi
+			r := 0.15 + rand.Float64()*0.55
+			spawnMist(v3(p[0]+math.Cos(a)*r, 0.08+rand.Float64()*0.35, p[1]+math.Sin(a)*r), 0.4)
+		}
+	}
+	mistPools = live
+}
+
+// genGlow: lights, status beacon and blade glow of a generator; base is where its floor
+// mount is, planted false while it hovers (no mount, so no mist)
+func (e *editor) genGlow(p pt2, H float64, prev, next pt2, hot bool, col rgba, fault, lift float64, base pt2, planted bool) {
+	t := fxTime()
+	if planted {
+		feedMist(base)
 	}
 	c := fl(p, lift)
 	up := v3(0, 1, 0)

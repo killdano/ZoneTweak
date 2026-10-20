@@ -110,7 +110,9 @@ THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
     jittering horizontal scanlines salted with harsh TV-static pixels that hang on a
     moment longer - they never fade, they just turn up less and less until they're gone - with lone stray lines thrown out further away - across the sheet. The laser pointer reaches as far as
     the room, at any height. The haze is thin
-    overall, with curling vapour pooling round the generators, slow drifting banks of mist in
+    overall, with curling vapour pooling round the generator bases (it belongs to the
+    spot on the deck: tear a post off and its pool thins out and drifts away, and a new one
+    builds up over a few seconds wherever a base settles), slow drifting banks of mist in
     the hall, and steam rolling out of the doorways the robots use. Smoke and steam are lit by
     the lasers and lamps around them.
     Menu > GRAPHICS opens a page where you pick ULTRA, HIGH, MEDIUM, LOW or POTATO directly. It

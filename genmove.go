@@ -738,7 +738,7 @@ func (e *editor) drawGen(i int, p pt2, H float64, prev, next pt2, hot bool, col 
 		beam(fl(anchor, 0.04), fl(p, 0.06), cEnergy, 0.012, 1)
 	}
 	genShaftGeom(p, H, prev, next, lift)
-	e.genGlow(p, H, prev, next, hot, col, fault, lift)
+	e.genGlow(p, H, prev, next, hot, col, fault, lift, anchor, !floating)
 }
 
 // ---- salvage + wall interlocks + evasion ----

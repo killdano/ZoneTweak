@@ -129,8 +129,9 @@ func (g *gpuTimes) lines() []string {
 	for _, nm := range g.order {
 		parts = append(parts, fmt.Sprintf("%s %.1f", nm, g.avg[nm]))
 	}
-	if len(parts) > 4 {
-		return []string{a, strings.Join(parts[:4], "  "), strings.Join(parts[4:], "  ")}
+	out := []string{a}
+	for i := 0; i < len(parts); i += 3 {
+		out = append(out, strings.Join(parts[i:min(i+3, len(parts))], "  "))
 	}
-	return []string{a, strings.Join(parts, "  ")}
+	return out
 }

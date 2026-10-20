@@ -549,15 +549,15 @@ func (e *editor) buildPages() {
 	}
 	e.pageGfx = &page{cols: 2, keyH: 0.056,
 		header: func() []string {
-			return append([]string{"GRAPHICS QUALITY", "APPLIES INSTANTLY. IF THE HEADSET STUTTERS OR REPROJECTS, GO DOWN ONE"}, gt.lines()...)
+			return append([]string{"GRAPHICS QUALITY", "APPLIES INSTANTLY. IF IT STUTTERS, GO DOWN ONE"}, gt.lines()...)
 		},
 		buttons: func() []button {
 			return []button{
-				gfxBtn(0, "8X AA, 4K SHADOWS, FULL FOG"),
+				gfxBtn(0, "8X AA, 4K SHADOWS"),
 				gfxBtn(1, "4X AA, 2K SHADOWS"),
-				gfxBtn(2, "2X AA, 1K SHADOWS, LIGHTER FOG"),
-				gfxBtn(3, "NO REFLECTIONS, FEWER LIGHTS"),
-				gfxBtn(4, "BARE MINIMUM: NO AA, SHADOWS, WATER OR HAZE FX"),
+				gfxBtn(2, "2X AA, LIGHTER FOG"),
+				gfxBtn(3, "NO REFLECTIONS"),
+				gfxBtn(4, "BARE MINIMUM"),
 				{label: func() string { return fmt.Sprintf("RENDER SCALE %d%%", int(renderScale*100+0.5)) }, act: func() {
 					k := 0
 					for i, v := range renderScales {
@@ -588,7 +588,7 @@ func (e *editor) buildPages() {
 					perfOpt = !perfOpt
 					wantRebuild = true
 					saveGfx(appDir)
-					e.say("Optimized rendering %s. Compare the GPU time above", onoff(perfOpt))
+					e.say("Optimized rendering %s", onoff(perfOpt))
 				}},
 				{label: func() string { return "BACK" }, act: func() { e.page = e.pageMain }, span: 2},
 			}
@@ -741,7 +741,7 @@ const (
 	panelW   = 0.56
 	btnGap   = 0.010
 	headerH0 = 0.085
-	footerH  = 0.045
+	footerH  = 0.032
 	textPx   = 0.0027
 	smallPx  = 0.0021
 	panelPad = 0.02
@@ -749,9 +749,55 @@ const (
 
 type slot struct{ cx, cy, w, h float64 }
 
+// headerLines: the page's header, word-wrapped to the panel width (title in the big font)
+func headerLines(p *page) []string {
+	var out []string
+	for i, l := range p.header() {
+		px := smallPx
+		if i == 0 {
+			px = textPx
+		}
+		n := int((panelW - 2*panelPad - 0.03) / (6 * px))
+		if i == 0 {
+			out = append(out, l) // the title shrinks to fit instead (see titlePx)
+			continue
+		}
+		out = append(out, wrapWords(l, n)...)
+	}
+	return out
+}
+
+// titlePx: the header title's pixel size, smaller when it wouldn't fit the panel
+func titlePx(s string) float64 {
+	return min(textPx, (panelW-2*panelPad-0.05)/(6*float64(len(s))))
+}
+
+func wrapWords(s string, n int) []string {
+	if len(s) <= n {
+		return []string{s}
+	}
+	var out []string
+	line := ""
+	for _, w := range strings.Fields(s) {
+		switch {
+		case line == "":
+			line = w
+		case len(line)+1+len(w) <= n:
+			line += " " + w
+		default:
+			out = append(out, line)
+			line = w
+		}
+	}
+	if line != "" || len(out) == 0 {
+		out = append(out, clip(line, n))
+	}
+	return out
+}
+
 // pageHeaderH: room for the page's header lines (three fit the standard height)
 func pageHeaderH(p *page) float64 {
-	return max(headerH0, 0.03+float64(len(p.header()))*0.026+0.003)
+	return max(headerH0, 0.03+float64(len(headerLines(p)))*0.026+0.003)
 }
 
 func (e *editor) layout() ([]slot, float64) {
@@ -1238,6 +1284,7 @@ func (e *editor) buildScene() {
 			}
 			e.drawGen(i, p, e.height, e.pts[(i-1+n)%n], e.pts[(i+1)%n], hotV[i], e.wallTint(level, false), genFault[i])
 		}
+		updateMist()
 		e.updateRemovals()
 		e.drawRemovals(e.wallTint(level, false))
 		e.drawOldBases()
@@ -1426,13 +1473,13 @@ func (e *editor) buildPanel() {
 	hdrY := h2 - pageHeaderH(e.page) + 0.008
 	ribbon(e.panelPoint(-w2+0.01, hdrY, 0.002), e.panelPoint(w2-0.01, hdrY, 0.002), 0.004, cEnergy.alpha(0.6))
 	bGlowLine.line(e.panelPoint(-w2+0.01, hdrY, 0.002), e.panelPoint(w2-0.01, hdrY, 0.002), cEnergy.alpha(0.8))
-	for i, l := range e.page.header() {
+	for i, l := range headerLines(e.page) {
 		px, col := smallPx, cMuted
 		if i == 0 {
-			px, col = textPx, cEnergy
+			px, col = titlePx(l), cEnergy
 			sprite(e.panelPoint(-w2+panelPad+0.08, h2-0.025, 0.001), 0.06, cEnergy.alpha(0.08))
 		}
-		drawText(&bOpaque, clip(l, 64), e.panelPoint(-w2+panelPad, h2-0.03-float64(i)*0.026, 0.003), R, U, px, col)
+		drawText(&bOpaque, l, e.panelPoint(-w2+panelPad, h2-0.03-float64(i)*0.026, 0.003), R, U, px, col)
 	}
 	bars := 5
 	for k := 0; k < bars; k++ {
@@ -1527,8 +1574,7 @@ func (e *editor) buildPanel() {
 		}
 	}
 	ribbon(e.panelPoint(-w2+0.01, -h2+footerH-0.006, 0.002), e.panelPoint(w2-0.01, -h2+footerH-0.006, 0.002), 0.003, cBeam.alpha(0.4))
-	drawText(&bOpaque, clip(e.status, 60), e.panelPoint(-w2+panelPad, -h2+0.03, 0.003), R, U, smallPx, cWhite)
-	drawText(&bOpaque, "POINT INTO A BUTTON AND PULL THE TRIGGER", e.panelPoint(-w2+panelPad, -h2+0.011, 0.003), R, U, smallPx*0.9, cMuted)
+	drawText(&bOpaque, clip(e.status, 41), e.panelPoint(-w2+panelPad, -h2+0.014, 0.003), R, U, smallPx, cWhite)
 }
 
 func fail(msg string) {
