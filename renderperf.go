@@ -344,11 +344,25 @@ func (r *renderer) drawMask(eye int, proj mat4) {
 
 var runBuf [][2]int
 
-func (r *renderer) drawStatic(vp *mat4) {
+// slideOn: the wall-slide mapping applies to the room's static geometry only, never to the
+// generators, robots or anything else that moves on its own
+func slideOn(p *prog, on bool) {
+	if slideActive() {
+		v := 0
+		if on {
+			v = 1
+		}
+		p.i1("u_slideOn", v)
+	}
+}
+
+func (r *renderer) drawStatic(p *prog, vp *mat4) {
 	g, ok := gpu[&bStatic]
 	if !ok || g.n == 0 {
 		return
 	}
+	slideOn(p, true)
+	defer slideOn(p, false)
 	call(glBindBufferP, glArrayBuffer, uintptr(g.vbo))
 	bindAttribs(false)
 	if vp == nil || len(r.staticChunks) == 0 || slideActive() {
@@ -383,7 +397,7 @@ func setSlide(p *prog) {
 		return
 	}
 	g := envG
-	p.i1("u_slideOn", 1)
+	p.i1("u_slideOn", 0) // switched on only around the room's own geometry (slideOn)
 	p.f3("u_sO", v3(g.tx, 0, g.tz))
 	p.f3("u_sX", v3(g.a, 0, g.c))
 	p.f3("u_sZ", v3(g.b, 0, g.d))

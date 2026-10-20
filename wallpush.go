@@ -102,13 +102,18 @@ func (e *editor) wallPush(h *hand, p pt2) pt2 {
 		if i%2 == 0 {
 			sgn = -1
 		}
-		stop := (wallsOf(envBox)[i] - sgn*wallClear) * sgn // in the push direction
+		wall := wallsOf(envBox)[i]
+		if slideActive() {
+			// a wall still sliding back: the post follows it out instead of jumping ahead
+			wall = slide.old[i] + (slide.new[i]-slide.old[i])*slideK()
+		}
+		stop := (wall - sgn*wallClear) * sgn // in the push direction
 		u := q[ax] * sgn
 		over := u - stop
 		if over <= 0 {
 			continue
 		}
-		if over > breakPush {
+		if over > breakPush && !slideActive() {
 			// it gives: the wall slides back far enough for the post plus a bit
 			nb := (u + wallClear + 0.4 - wallMargin) * sgn
 			if sgn > 0 {

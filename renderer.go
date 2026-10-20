@@ -609,7 +609,7 @@ func (r *renderer) beginFrame(cam vec3) int {
 			r.shadowCacheKey[i] = key
 			call(glBindFramebufferP, glFramebuffer, uintptr(r.shadowCacheFBO[i]))
 			call(glClearP, glDepthBufferBit)
-			r.drawStatic(nil)
+			r.drawStatic(r.shadow, nil)
 			drawGenPartsIn(nil)
 		}
 		call(glBindFramebufferP, glReadFramebuffer, uintptr(r.shadowCacheFBO[i]))
@@ -674,7 +674,7 @@ func (r *renderer) drawMirror(ex *eyeExtras, cam vec3, nl int, vpm mat4, cull *m
 	if nl > 12 {
 		r.lit.i1("u_nL", 12)
 	}
-	r.drawStatic(cull)
+	r.drawStatic(r.lit, cull)
 	drawGenPartsIn(cull)
 	drawB(&bEnv, glTriangles)
 	r.drawGlowPass(vpm, false)
@@ -752,7 +752,7 @@ func (r *renderer) renderEye(eye int, t *eyeTarget, proj mat4, view hmdMatrix34,
 		call(glUseProgramP, uintptr(r.depth.id))
 		r.depth.m4("u_vp", vp)
 		setSlide(r.depth)
-		r.drawStatic(cv)
+		r.drawStatic(r.depth, cv)
 		drawGenPartsIn(cv)
 		drawB(&bEnv, glTriangles)
 		call(glColorMaskP, 1, 1, 1, 1)
@@ -785,7 +785,9 @@ func (r *renderer) renderEye(eye int, t *eyeTarget, proj mat4, view hmdMatrix34,
 	r.floor.f3("u_fo", floorFrame.o)
 	r.floor.f3("u_fx", floorFrame.x)
 	r.floor.f3("u_fz", floorFrame.z)
+	slideOn(r.floor, true)
 	drawB(&bFloorQ, glTriangles)
+	slideOn(r.floor, false)
 
 	call(glUseProgramP, uintptr(r.lit.id))
 	r.setScene(r.lit, cam, lightBuf, nl)
@@ -794,7 +796,9 @@ func (r *renderer) renderEye(eye int, t *eyeTarget, proj mat4, view hmdMatrix34,
 	r.lit.f1("u_alphaMode", 1)
 	r.lit.f1("u_emisGain", 4)
 	call(glDepthMaskP, 0)
+	slideOn(r.lit, true)
 	drawB(&bFloorS, glTriangles)
+	slideOn(r.lit, false)
 	drawB(&bFloor, glTriangles)
 	call(glUseProgramP, uintptr(r.sprite.id))
 	r.sprite.m4("u_vp", vp)
@@ -810,7 +814,7 @@ func (r *renderer) renderEye(eye int, t *eyeTarget, proj mat4, view hmdMatrix34,
 	if !perfOpt {
 		call(glDepthMaskP, 1) // no prepass: these lay down their own depth
 	}
-	r.drawStatic(cv)
+	r.drawStatic(r.lit, cv)
 	drawGenPartsIn(cv)
 	drawB(&bEnv, glTriangles)
 	call(glDepthMaskP, 1)
@@ -818,7 +822,9 @@ func (r *renderer) renderEye(eye int, t *eyeTarget, proj mat4, view hmdMatrix34,
 	drawB(&bOpaque, glTriangles)
 	call(glLineWidthP, f32(1))
 	drawB(&bEnvL, glLines)
+	slideOn(r.lit, true)
 	drawB(&bStaticL, glLines)
+	slideOn(r.lit, false)
 	call(glEnableP, glBlend)
 	call(glBlendFuncP, glSrcAlpha, glOneMinusSrcAlpha)
 	r.lit.f1("u_alphaMode", 1)
