@@ -1770,6 +1770,7 @@ func main() {
 		}
 		wantQuality, wantRebuild = -1, false
 		cpu0 := time.Now()
+		xs.waited = 0
 		ed.cur = ed.page.buttons()
 		ed.buildScene()
 		nl := R.beginFrame(ed.hmd.pos())
@@ -1778,7 +1779,9 @@ func main() {
 		}); err != nil {
 			log.Println(err)
 		}
-		gt.cpu += (time.Since(cpu0).Seconds()*1000 - gt.cpu) * 0.05
+		// CPU work only: the time spent blocked waiting on the runtime (the GPU) doesn't count
+		gt.cpu += ((time.Since(cpu0)-xs.waited).Seconds()*1000 - gt.cpu) * 0.05
+		xs.waited = 0
 		swapBuffers()
 	}
 	xrShutdown()

@@ -7,6 +7,7 @@ import (
 	"log"
 	"runtime"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -100,6 +101,7 @@ type xrState struct {
 	event                                  *xrEventBuffer
 	dstFBO                                 uint32
 	hasMask                                bool
+	waited                                 time.Duration // time this frame spent blocked in the runtime
 	mask                                   [2][]float32 // hidden-area triangles per eye, view space
 	maskVer                                int
 }
@@ -608,9 +610,11 @@ func xrRenderAndEnd(fi frameInfo, eyes [2]*eyeTarget, draw func(eye int, t *eyeT
 					return err
 				}
 				wi := &xrSwapchainWaitInfo{typ: xrTypeWaitInfo, timeout: xrInfinite}
+				w0 := time.Now()
 				if err := xok(xcall("xrWaitSwapchainImage", xs.swap[i], uintptr(unsafe.Pointer(wi))), "wait image"); err != nil {
 					return err
 				}
+				xs.waited += time.Since(w0)
 				proj := projFromFov(v.fov, 0.05, 60)
 				view := inv34(poseTo34(v.pose))
 				call(glBindFramebufferP, glFramebuffer, uintptr(xs.dstFBO))
@@ -639,7 +643,10 @@ func xrRenderAndEnd(fi frameInfo, eyes [2]*eyeTarget, draw func(eye int, t *eyeT
 		blend = 3
 	}
 	ei := &xrFrameEndInfo{typ: xrTypeFrameEndInfo, displayTime: fi.time, blend: blend, layerCount: layers, layers: uintptr(unsafe.Pointer(xs.layerPtr))}
-	return xok(xcall("xrEndFrame", xs.session, uintptr(unsafe.Pointer(ei))), "xrEndFrame")
+	w0 := time.Now()
+	r := xcall("xrEndFrame", xs.session, uintptr(unsafe.Pointer(ei)))
+	xs.waited += time.Since(w0)
+	return xok(r, "xrEndFrame")
 }
 
 func xrShutdown() {

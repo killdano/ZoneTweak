@@ -418,7 +418,7 @@ func (e *editor) drawDeploy(d *deploy, p pt2, H float64, prev, next pt2) bool {
 			beam(fl(p, lift+0.03), fl(p, 0.005), cEnergy, 0.02, 2)
 			addPoint(fl(p, lift), cEnergyHot, 2.5, 2.5)
 		} else if rg := regrowAt(p); rg != nil {
-			ra := fxTime() - rg.t0
+			ra := math.Max(0, fxTime()-rg.t0)
 			lift = math.Max(0, 0.12*(1-ra/0.35))
 			genBaseGeom(p, p, smooth((ra-0.2)/1.2), false, 0, ax)
 		}

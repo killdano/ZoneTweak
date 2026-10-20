@@ -168,10 +168,25 @@ func (e *editor) regrab(h *hand, idx int) bool {
 	p := e.pts[idx]
 	t := fxTime()
 	if d := deployAt(p); d != nil {
-		for i, x := range deploys {
-			if x == d {
-				deploys = append(deploys[:i], deploys[i+1:]...)
-				break
+		// still deploying: the capsule animation carries on exactly as if the trigger had
+		// been held the whole time, and the post hovers in the hand once it has landed
+		age := t - d.t0
+		if d.hand == nil && age > 0.45 {
+			// a corner from the outline tool had started growing its own base
+			if g := math.Min(1, (age-0.45)/0.6); g > 0.01 {
+				retracts = append(retracts, retract{pos: p, ax: baseAxisFor(p, e.pts[(idx-1+len(e.pts))%len(e.pts)], e.pts[(idx+1)%len(e.pts)]), t0: t, g0: g})
+			}
+		}
+		d.hand = h
+		if rg := regrowAt(p); rg != nil {
+			if g := regrowGrow(t - rg.t0); g > 0.01 {
+				retracts = append(retracts, retract{pos: p, ax: rg.ax, t0: t, g0: g})
+			}
+			for i, x := range regrows {
+				if x == rg {
+					regrows = append(regrows[:i], regrows[i+1:]...)
+					break
+				}
 			}
 		}
 		h.gAnchor, h.gJoint = p, false
@@ -273,7 +288,11 @@ func (e *editor) grabEnd(h *hand) {
 			e.sfx(sndHydraulic, fl(p, 0.2), 0.9)
 			hapticAmp(h.idx, 60, 0.7)
 		} else {
-			regrows = append(regrows, &regrow{pos: p, t0: fxTime(), ax: ax, shear: sh, fresh: h.gNew})
+			t0 := fxTime()
+			if d := deployAt(p); d != nil {
+				t0 = math.Max(t0, d.t0+0.45) // the mount unfolds once the capsule is down
+			}
+			regrows = append(regrows, &regrow{pos: p, t0: t0, ax: ax, shear: sh, fresh: h.gNew})
 			e.sfx(sndRegrow, fl(p, 0.2), 0.9)
 		}
 	} else if !h.gNew && h.grab >= 0 && h.grab < len(e.pts) {
@@ -678,7 +697,7 @@ func (e *editor) drawGen(i int, p pt2, H float64, prev, next pt2, hot bool, col 
 			}
 		}
 	} else if rg != nil {
-		age := t - rg.t0
+		age := math.Max(0, t-rg.t0)
 		lift = math.Max(0, 0.12*(1-age/0.35))
 		grow := regrowGrow(age)
 		if len(rg.shear) > 0 && grow > 0.55 {
