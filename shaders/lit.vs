@@ -4,6 +4,7 @@ layout(location = 2) in vec4 a_col;
 layout(location = 3) in vec4 a_mat;
 layout(location = 4) in vec3 a_tex;
 uniform mat4 u_vp;
+invariant gl_Position; // the depth prepass and the shaded pass must land on identical depths
 out vec3 v_pos;
 out vec3 v_nrm;
 out vec4 v_col;

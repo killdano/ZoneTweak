@@ -7,6 +7,10 @@ uniform vec3 u_fo;
 uniform vec3 u_fx;
 uniform vec3 u_fz;
 uniform float u_reflScale;
+// the reflection, rendered at reduced resolution into its own texture (when u_reflTex is 1)
+uniform sampler2D u_refl;
+uniform float u_reflTex;
+uniform vec2 u_screen;
 out vec4 o_col;
 
 // floor: riveted steel deck plates, drain grates, oil, standing water that mirrors the cell
@@ -141,5 +145,16 @@ void main() {
     float fres = 0.04 + 0.96 * pow(1.0 - NdV, 5.0);
     float refl = mix(0.10, 0.92, wet) * mix(1.0, 0.25, smoothstep(0.1, 0.6, rough));
     refl = clamp(mix(refl, 1.0, fres * (1.0 - rough)), 0.0, 0.95) * (1.0 - hole) * u_reflScale;
-    o_col = vec4(sane(c), clamp(1.0 - refl, 0.0, 1.0));
+    float keep = clamp(1.0 - refl, 0.0, 1.0);
+    if (u_reflTex > 0.5) {
+        // ripples in the standing water bend the reflection a little
+        vec2 suv = gl_FragCoord.xy / u_screen + N.xz * 0.006 * wet;
+        // four bilinear taps: smooths the low-res, un-antialiased reflection
+        vec2 rt = 0.75 / vec2(textureSize(u_refl, 0));
+        vec3 rc = 0.25 * (texture(u_refl, suv + vec2(rt.x, rt.y)).rgb + texture(u_refl, suv + vec2(-rt.x, rt.y)).rgb +
+                          texture(u_refl, suv + vec2(rt.x, -rt.y)).rgb + texture(u_refl, suv - rt).rgb);
+        o_col = vec4(sane(mix(rc, c, keep)), 1.0);
+        return;
+    }
+    o_col = vec4(sane(c), keep);
 }

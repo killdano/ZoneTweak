@@ -28,7 +28,8 @@ It runs on **OpenXR**, so it works with whichever OpenXR runtime is active: Pima
   posts in a grim industrial prison, with robots that repair, salvage and fight the
   occasional fire. All procedural, with a fully synthesized sound engine. None of it is
   written to Pimax.
-- **Graphics presets**: from Ultra down to Potato, applied instantly.
+- **Graphics presets**: from Ultra down to Potato, applied instantly, plus a render scale,
+  fixed foveated rendering on NVIDIA GPUs and live per-pass GPU timings on the graphics page.
 
 The full user manual is in [`docs/MANUAL.txt`](docs/MANUAL.txt).
 

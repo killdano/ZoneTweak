@@ -85,6 +85,12 @@ func (p *prog) f1(name string, v float32) {
 		call(glUniform1fvP, uintptr(l), 1, uintptr(unsafe.Pointer(&uf[0])))
 	}
 }
+func (p *prog) f2(name string, x, y float32) {
+	if l := p.loc(name); l >= 0 {
+		uf[0], uf[1] = x, y
+		call(glUniform2fvP, uintptr(l), 1, uintptr(unsafe.Pointer(&uf[0])))
+	}
+}
 func (p *prog) f3(name string, v vec3) {
 	if l := p.loc(name); l >= 0 {
 		uf[0], uf[1], uf[2] = float32(v.x), float32(v.y), float32(v.z)
@@ -175,6 +181,9 @@ type rtex struct {
 
 type renderer struct {
 	lit, floor, glow, sprite, smoke, flame, shadow, fog, fogcomp, bdown, bup, final *prog
+	mask                                                                            *prog
+	maskVBO                                                                         [2]uint32
+	staticChunks                                                                    []chunk
 	vao                                                                             uint32
 	vbos                                                                            map[any]uint32
 	shadowFBO, shadowTex                                                            [2]uint32
@@ -203,9 +212,9 @@ type quality struct {
 }
 
 var qualities = []quality{
-	{"ULTRA", 3, 40, 20, 8, 4096, 7, 0.035, 0.07, 1.35, 48, true},
-	{"HIGH", 4, 28, 14, 4, 2048, 6, 0.035, 0.07, 1.35, 40, true},
-	{"MEDIUM", 5, 18, 8, 2, 1024, 5, 0.033, 0.06, 1.35, 28, true},
+	{"ULTRA", 4, 40, 20, 8, 4096, 7, 0.035, 0.07, 1.35, 48, true},
+	{"HIGH", 5, 28, 14, 4, 2048, 6, 0.035, 0.07, 1.35, 40, true},
+	{"MEDIUM", 6, 18, 8, 2, 1024, 5, 0.033, 0.06, 1.35, 28, true},
 	{"LOW", 8, 10, 5, 2, 1024, 4, 0.03, 0.05, 1.35, 14, false},
 	{"POTATO", 12, 5, 2, 0, 256, 3, 0.022, 0.04, 1.35, 6, false},
 }
@@ -277,9 +286,24 @@ func newRenderer(qi int) (*renderer, error) {
 	mk(&r.bdown, "post.vs", "bloomdown.fs", false)
 	mk(&r.bup, "post.vs", "bloomup.fs", false)
 	mk(&r.final, "post.vs", "final.fs", false)
+	mk(&r.mask, "mask.vs", "mask.fs", false)
 	if err != nil {
 		return nil, err
 	}
+	loadPerfGL()
+	gt.init()
+	// fixed texture units for every sampler the shared shader code declares, so no two
+	// samplers of different kinds ever default onto the same unit
+	for _, p := range []*prog{r.lit, r.floor, r.smoke, r.flame, r.fog} {
+		call(glUseProgramP, uintptr(p.id))
+		p.i1("u_shadow0", 1)
+		p.i1("u_shadow1", 2)
+		p.i1("u_tileHdr", 5)
+		p.i1("u_tileIdx", 6)
+		p.i1("u_refl", 7)
+		p.i1("u_tiled", 0)
+	}
+	call(glUseProgramP, 0)
 	call(glGenVertexArraysP, 1, uintptr(unsafe.Pointer(&gIDs[0])))
 	r.vao = gIDs[0]
 	call(glBindVertexArrayP, uintptr(r.vao))
@@ -328,13 +352,8 @@ func (r *renderer) setQuality(qi int) {
 		r.shadowCacheKey[i] = shadowKey{}
 	}
 	r.makeShadowMaps()
-	for t, p := range posts {
-		p.hdr2.free()
-		p.fogT.free()
-		for _, b := range p.bloom {
-			b.free()
-		}
-		delete(posts, t)
+	for t := range posts {
+		freePosts(t)
 	}
 	log.Printf("renderer: switched to %s", r.q.name)
 }
@@ -380,6 +399,7 @@ type shadowKey struct {
 type postSet struct {
 	hdr2, fogT rtex
 	bloom      []rtex
+	ex         *eyeExtras
 }
 
 var posts = map[*eyeTarget]*postSet{}
@@ -427,6 +447,8 @@ func (r *renderer) uploadAll() {
 		gpu[b] = gpuBatch{id, n / vstride, false}
 	}
 	if r.uploadedStatic != r.staticVer || gpu[&bStatic].vbo == 0 {
+		// the room is sorted into 2 m columns so each eye only draws the ones in view
+		r.staticChunks = chunkify(bStatic.v, 2)
 		for _, b := range []*batch{&bStatic, &bStaticL, &bFloorS, &bFloorQ} {
 			id, n := r.upload(b, b.v)
 			gpu[b] = gpuBatch{id, n / vstride, false}
@@ -439,7 +461,7 @@ func (r *renderer) uploadAll() {
 		g := genVBOs[p.key]
 		if g == nil {
 			call(glGenBuffersP, 1, uintptr(unsafe.Pointer(&gIDs[0])))
-			g = &genVBO{vbo: gIDs[0], n: len(p.v) / vstride}
+			g = &genVBO{vbo: gIDs[0], n: len(p.v) / vstride, box: boxOf(p.v)}
 			call(glBindBufferP, glArrayBuffer, uintptr(g.vbo))
 			call(glBufferDataP, glArrayBuffer, uintptr(len(p.v)*4), uintptr(unsafe.Pointer(&p.v[0])), glStaticDraw)
 			genVBOs[p.key] = g
@@ -487,6 +509,7 @@ type genVBO struct {
 	vbo  uint32
 	n    int
 	used int
+	box  aabb
 }
 
 var (
@@ -494,19 +517,6 @@ var (
 	genUploadN       int
 	glDeleteBuffersP uintptr
 )
-
-// drawGenParts: every static generator piece in use this frame
-func drawGenParts() {
-	for _, p := range genParts {
-		g := genVBOs[p.key]
-		if g == nil || g.n == 0 {
-			continue
-		}
-		call(glBindBufferP, glArrayBuffer, uintptr(g.vbo))
-		bindAttribs(false)
-		call(glDrawArraysP, glTriangles, 0, uintptr(g.n))
-	}
-}
 
 func drawB(key any, mode uintptr) {
 	g, ok := gpu[key]
@@ -563,6 +573,7 @@ var lightBuf []float32
 
 func (r *renderer) beginFrame(cam vec3) int {
 	r.frame++
+	gt.frame()
 	r.uploadAll()
 	var n int
 	lightBuf, n = packLights(cam, lightBuf)
@@ -590,8 +601,8 @@ func (r *renderer) beginFrame(cam vec3) int {
 			r.shadowCacheKey[i] = key
 			call(glBindFramebufferP, glFramebuffer, uintptr(r.shadowCacheFBO[i]))
 			call(glClearP, glDepthBufferBit)
-			drawB(&bStatic, glTriangles)
-			drawGenParts()
+			r.drawStatic(nil)
+			drawGenPartsIn(nil)
 		}
 		call(glBindFramebufferP, glReadFramebuffer, uintptr(r.shadowCacheFBO[i]))
 		call(glBindFramebufferP, glDrawFramebuffer, uintptr(r.shadowFBO[i]))
@@ -600,6 +611,7 @@ func (r *renderer) beginFrame(cam vec3) int {
 		call(glBindFramebufferP, glFramebuffer, uintptr(r.shadowFBO[i]))
 		drawB(&bEnv, glTriangles)
 	}
+	gt.mark("SHADOW")
 	return n
 }
 
@@ -641,7 +653,26 @@ func (r *renderer) drawGlowPass(vp mat4, wide bool) {
 	call(glBlendFuncP, glSrcAlpha, glOneMinusSrcAlpha)
 }
 
-func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3, nl int, floorY float32, dst uint32) {
+// drawMirror: the room flipped under the deck, cheap shading, its glow added on top
+func (r *renderer) drawMirror(ex *eyeExtras, cam vec3, nl int, vpm mat4, cull *mat4) {
+	call(glUseProgramP, uintptr(r.lit.id))
+	r.setScene(r.lit, cam, lightBuf, nl)
+	r.bindTiles(r.lit, ex, false)
+	r.lit.f3("u_cam", vec3{cam.x, -cam.y, cam.z})
+	r.lit.f1("u_emisGain", 4)
+	r.lit.f1("u_alphaMode", 0)
+	r.lit.m4("u_vp", vpm)
+	r.lit.f1("u_cheap", 1)
+	if nl > 12 {
+		r.lit.i1("u_nL", 12)
+	}
+	r.drawStatic(cull)
+	drawGenPartsIn(cull)
+	drawB(&bEnv, glTriangles)
+	r.drawGlowPass(vpm, false)
+}
+
+func (r *renderer) renderEye(eye int, t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3, nl int, floorY float32, dst uint32, dw, dh int32) {
 	for i := 0; i < 3; i++ {
 		view[i][3] += view[i][1] * floorY
 	}
@@ -652,6 +683,38 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 	vp := mul4(proj, mat4From34(view))
 	vpm := mul4(proj, mat4From34(mirror))
 	r.ensureTargets(t)
+	ex := r.extrasFor(t)
+	cheap := float32(0)
+	if r.q.potato() {
+		cheap = 1
+	}
+	tiled := perfOpt && !r.q.potato() && ex.uploadTiles(vp, lightBuf, nl, t.w, t.h)
+	cv, cvm := &vp, &vpm // culling matrices (nil draws everything)
+	if !perfOpt {
+		cv, cvm = nil, nil
+	}
+
+	// the reflection: the mirrored room at reduced resolution, plain materials and the nearest
+	// lights (it's only ever seen dimmed through the wet deck)
+	inPlace := r.q.mirror && (ex.refl.fbo == 0 || !perfOpt)
+	if r.q.mirror && !inPlace {
+		m := ex.reflMS
+		call(glBindFramebufferP, glFramebuffer, uintptr(m.msFBO))
+		call(glViewportP, 0, 0, uintptr(m.w), uintptr(m.h))
+		call(glClearColorP, 0, 0, 0, 0)
+		call(glClearP, glColorBufferBit|glDepthBufferBit)
+		call(glEnableP, glDepthTest)
+		call(glEnableP, glMultisample)
+		call(glDisableP, glBlend)
+		call(glDepthFuncP, glLess)
+		r.drawMask(eye, proj)
+		r.drawMirror(ex, cam, nl, vpm, cvm)
+		call(glDisableP, glBlend)
+		call(glBindFramebufferP, glReadFramebuffer, uintptr(m.msFBO))
+		call(glBindFramebufferP, glDrawFramebuffer, uintptr(ex.refl.fbo))
+		call(glBlitFramebufferP, 0, 0, uintptr(m.w), uintptr(m.h), 0, 0, uintptr(m.w), uintptr(m.h), glColorBufferBit, glNearest)
+		gt.mark("REFLECT")
+	}
 
 	call(glBindFramebufferP, glFramebuffer, uintptr(t.msFBO))
 	call(glViewportP, 0, 0, uintptr(t.w), uintptr(t.h))
@@ -660,56 +723,65 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 	call(glEnableP, glDepthTest)
 	call(glEnableP, glMultisample)
 	call(glDisableP, glBlend)
-
-	call(glUseProgramP, uintptr(r.lit.id))
-	r.setScene(r.lit, cam, lightBuf, nl)
-	r.lit.f3("u_cam", vec3{cam.x, -cam.y, cam.z})
-	r.lit.f1("u_emisGain", 4)
+	call(glDepthFuncP, glLess)
+	if perfOpt {
+		r.drawMask(eye, proj)
+	}
+	if inPlace {
+		r.drawMirror(ex, cam, nl, vpm, cvm)
+	}
 	if r.frame < 4 {
 		if e := uint32(call(opengl32.NewProc("glGetError").Addr())); e != 0 {
 			log.Printf("GL error before frame %v: 0x%x", r.frame, e)
 		}
 	}
-	r.lit.f1("u_alphaMode", 0)
-	r.lit.m4("u_vp", vpm)
-	if r.q.mirror {
-		// the reflection is seen dimmed through the wet deck: plain materials and the nearest
-		// lights are plenty for it
-		r.lit.f1("u_cheap", 1)
-		if nl > 12 {
-			r.lit.i1("u_nL", 12)
-		}
-		drawB(&bStatic, glTriangles)
-		drawGenParts()
+
+	// depth prepass: the room, generators and everything opaque that moves, depth only, so the
+	// expensive shading below runs once per visible pixel
+	call(glDisableP, glBlend)
+	if perfOpt {
+		call(glColorMaskP, 0, 0, 0, 0)
+		call(glUseProgramP, uintptr(r.shadow.id))
+		r.shadow.m4("u_vp", vp)
+		r.drawStatic(cv)
+		drawGenPartsIn(cv)
 		drawB(&bEnv, glTriangles)
-		r.drawGlowPass(vpm, false)
-		call(glUseProgramP, uintptr(r.lit.id))
-		cheap := float32(0)
-		if r.q.potato() {
-			cheap = 1
-		}
-		r.lit.f1("u_cheap", cheap)
-		r.lit.i1("u_nL", nl)
+		call(glColorMaskP, 1, 1, 1, 1)
+		gt.mark("PREPASS")
 	}
+	call(glDepthFuncP, glDepthFuncLEqual)
+	fov := perfOpt && r.fovea(t, ex, proj)
 
 	call(glEnableP, glBlend)
 	call(glBlendFuncP, glSrcAlpha, glOneMinusSrcAlpha)
 	call(glUseProgramP, uintptr(r.floor.id))
 	r.setScene(r.floor, cam, lightBuf, nl)
+	r.bindTiles(r.floor, ex, tiled)
 	r.floor.m4("u_vp", vp)
 	if r.q.mirror {
 		r.floor.f1("u_reflScale", 1)
 	} else {
 		r.floor.f1("u_reflScale", 0.3)
 	}
+	refl := float32(0)
+	if r.q.mirror && !inPlace {
+		refl = 1
+		bindTex(7, ex.refl.tex)
+		r.floor.i1("u_refl", 7)
+	}
+	r.floor.f1("u_reflTex", refl)
+	r.floor.f2("u_screen", float32(t.w), float32(t.h))
 	r.floor.f3("u_fo", floorFrame.o)
 	r.floor.f3("u_fx", floorFrame.x)
 	r.floor.f3("u_fz", floorFrame.z)
 	drawB(&bFloorQ, glTriangles)
 
 	call(glUseProgramP, uintptr(r.lit.id))
+	r.setScene(r.lit, cam, lightBuf, nl)
+	r.bindTiles(r.lit, ex, tiled)
 	r.lit.m4("u_vp", vp)
 	r.lit.f1("u_alphaMode", 1)
+	r.lit.f1("u_emisGain", 4)
 	call(glDepthMaskP, 0)
 	drawB(&bFloorS, glTriangles)
 	drawB(&bFloor, glTriangles)
@@ -717,15 +789,20 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 	r.sprite.m4("u_vp", vp)
 	r.sprite.f1("u_dark", 1)
 	drawB(&bShadow, glTriangles)
-	call(glDepthMaskP, 1)
 
+	// opaque: already in the depth buffer, so no depth writes
 	call(glDisableP, glBlend)
 	call(glUseProgramP, uintptr(r.lit.id))
 	r.lit.f3("u_cam", cam)
+	r.lit.f1("u_cheap", cheap)
 	r.lit.f1("u_alphaMode", 0)
-	drawB(&bStatic, glTriangles)
-	drawGenParts()
+	if !perfOpt {
+		call(glDepthMaskP, 1) // no prepass: these lay down their own depth
+	}
+	r.drawStatic(cv)
+	drawGenPartsIn(cv)
 	drawB(&bEnv, glTriangles)
+	call(glDepthMaskP, 1)
 	r.lit.f1("u_emisGain", 1.3)
 	drawB(&bOpaque, glTriangles)
 	call(glLineWidthP, f32(1))
@@ -759,6 +836,11 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 	r.lit.f1("u_emisGain", 4)
 	r.drawGlowPass(vp, true)
 	call(glDisableP, glBlend)
+	if fov {
+		foveaOff()
+	}
+	call(glDepthFuncP, glLess)
+	gt.mark("SCENE")
 
 	// resolve colour + depth
 	call(glBindFramebufferP, glReadFramebuffer, uintptr(t.msFBO))
@@ -788,6 +870,7 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 	r.fog.f4v("u_FVp", fb)
 	r.fog.i1("u_nFV", nf)
 	fullscreen()
+	gt.mark("FOG")
 
 	call(glBindFramebufferP, glFramebuffer, uintptr(r.hdr2.fbo))
 	call(glViewportP, 0, 0, uintptr(t.w), uintptr(t.h))
@@ -828,8 +911,10 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 	}
 	call(glDisableP, glBlend)
 
+	// tone map straight into the headset image at its full size (this is also where a reduced
+	// render scale gets scaled back up)
 	call(glBindFramebufferP, glFramebuffer, uintptr(dst))
-	call(glViewportP, 0, 0, uintptr(t.w), uintptr(t.h))
+	call(glViewportP, 0, 0, uintptr(dw), uintptr(dh))
 	r.post(r.final)
 	bindTex(0, r.hdr2.tex)
 	r.final.i1("u_scene", 0)
@@ -841,6 +926,7 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 	r.final.f1("u_exposure", r.q.exposure)
 	r.final.f1("u_frame", r.frame)
 	fullscreen()
+	gt.mark("POST")
 	call(glUseProgramP, 0)
 	call(glEnableP, glDepthTest)
 	if r.frame < 4 {
@@ -851,12 +937,14 @@ func (r *renderer) renderEye(t *eyeTarget, proj mat4, view hmdMatrix34, cam vec3
 }
 
 func loadQuality(dir string) int {
+	loadGfxOpts(dir)
 	b, err := os.ReadFile(filepath.Join(dir, "spaces", "graphics.txt"))
 	if err != nil {
 		return 0
 	}
+	first := strings.TrimSpace(strings.SplitN(string(b), "\n", 2)[0])
 	for i, q := range qualities {
-		if strings.TrimSpace(string(b)) == q.name {
+		if first == q.name {
 			return i
 		}
 	}
@@ -864,6 +952,6 @@ func loadQuality(dir string) int {
 }
 
 func saveQuality(dir string, i int) {
-	os.MkdirAll(filepath.Join(dir, "spaces"), 0755)
-	os.WriteFile(filepath.Join(dir, "spaces", "graphics.txt"), []byte(qualities[i].name+"\n"), 0644)
+	qualityIdx = i
+	saveGfx(dir)
 }

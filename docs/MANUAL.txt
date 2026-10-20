@@ -119,6 +119,17 @@ THE PRISON (LOOK AND SOUND)  - all decoration, nothing here is saved to Pimax
     also turns off the floor reflections and uses fewer lights. POTATO is the bare minimum for
     weak GPUs: no anti-aliasing, no shadows, plain floor (no water), no surface detail, no
     mist or haze patches, very few lights and particles.
+    The same page has RENDER SCALE (100/90/80/70%: renders fewer pixels and scales the image
+    back up to the headset's size; each step down is roughly 20% less GPU work) and FOVEATED
+    (NVIDIA RTX / GTX 16 GPUs: the outer part of each eye is shaded at a lower rate, where the
+    lens blurs it anyway; the middle stays full quality). The header shows live timings:
+    total GPU and CPU milliseconds per frame and how long each pass takes (shadows,
+    reflection, depth prepass, scene, fog, post). They're also written to the log every
+    10 seconds.
+    Always on, no setting: nothing is drawn in the parts of the image hidden behind the lens
+    edge (when the headset runtime reports them), the floor reflection renders at reduced
+    resolution, everything opaque is laid down depth-first so each visible pixel is only
+    lit once, and room pieces outside the view aren't drawn.
   LASER WALLS
     Faint energy sheets with uneven filaments, occasional brown-outs, and rare random
     overcharge surges (roughly once a minute per wall): a flare at the base, then a bolt

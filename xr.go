@@ -99,6 +99,8 @@ type xrState struct {
 	layerPtr                               *uintptr
 	event                                  *xrEventBuffer
 	dstFBO                                 uint32
+	hasMask                                bool
+	mask                                   [2][]float32 // hidden-area triangles per eye, view space
 }
 
 var xs = &xrState{
@@ -187,7 +189,14 @@ func xrInit() error {
 	log.Printf("runtime extensions: %v", xs.exts)
 	ext := cbytes("XR_KHR_opengl_enable")
 	extPtrs := []uintptr{uintptr(unsafe.Pointer(&ext[0]))}
-	ci := &xrInstanceCreateInfo{typ: xrTypeInstanceCreateInfo, extCount: 1, extNames: uintptr(unsafe.Pointer(&extPtrs[0]))}
+	vmExt := cbytes("XR_KHR_visibility_mask")
+	for _, e := range xs.exts {
+		if e == "XR_KHR_visibility_mask" {
+			extPtrs = append(extPtrs, uintptr(unsafe.Pointer(&vmExt[0])))
+			xs.hasMask = true
+		}
+	}
+	ci := &xrInstanceCreateInfo{typ: xrTypeInstanceCreateInfo, extCount: uint32(len(extPtrs)), extNames: uintptr(unsafe.Pointer(&extPtrs[0]))}
 	setName(ci.app.appName[:], "ZoneTweak")
 	setName(ci.app.engineName[:], "none")
 	ci.app.apiVersion = 1 << 48
@@ -195,6 +204,7 @@ func xrInit() error {
 		return fmt.Errorf("%w. Is Pimax set as the active OpenXR runtime?", err)
 	}
 	runtime.KeepAlive(ext)
+	runtime.KeepAlive(vmExt)
 	runtime.KeepAlive(extPtrs)
 	gi := &xrSystemGetInfo{typ: xrTypeSystemGetInfo, formFactor: 1}
 	if err := xok(xcall("xrGetSystem", xs.inst, uintptr(unsafe.Pointer(gi)), uintptr(unsafe.Pointer(&xs.sysID))), "xrGetSystem"); err != nil {
@@ -315,7 +325,57 @@ func xrInit() error {
 		log.Printf("eye %d: %dx%d, %d images", i, w, h, ic)
 	}
 	xs.dstFBO = genOne(glGenFramebuffersP)
+	xrLoadMasks()
 	return nil
+}
+
+type xrVisibilityMask struct {
+	typ              int32
+	next             uintptr
+	vertCap, vertCnt uint32
+	verts            uintptr
+	idxCap, idxCnt   uint32
+	idx              uintptr
+}
+
+// xrLoadMasks: the triangles of each eye's image hidden behind the lens edge, as view-space
+// points on the z = -1 plane (XR_KHR_visibility_mask). Nothing is drawn there.
+func xrLoadMasks() {
+	if !xs.hasMask {
+		log.Printf("visibility mask: not offered by the runtime")
+		return
+	}
+	var fn uintptr
+	nm := cbytes("xrGetVisibilityMaskKHR")
+	xcall("xrGetInstanceProcAddr", xs.inst, uintptr(unsafe.Pointer(&nm[0])), uintptr(unsafe.Pointer(&fn)))
+	if fn == 0 {
+		return
+	}
+	for i := 0; i < 2; i++ {
+		m := &xrVisibilityMask{typ: 1000031000}
+		r, _, _ := syscall.SyscallN(fn, xs.session, xrStereo, uintptr(i), 1, uintptr(unsafe.Pointer(m)))
+		if int32(r) < 0 || m.vertCnt == 0 || m.idxCnt == 0 {
+			log.Printf("visibility mask eye %d: none (%d)", i, int32(r))
+			continue
+		}
+		verts := make([]float32, m.vertCnt*2)
+		idx := make([]uint32, m.idxCnt)
+		m2 := &xrVisibilityMask{typ: 1000031000, vertCap: m.vertCnt, verts: uintptr(unsafe.Pointer(&verts[0])), idxCap: m.idxCnt, idx: uintptr(unsafe.Pointer(&idx[0]))}
+		r, _, _ = syscall.SyscallN(fn, xs.session, xrStereo, uintptr(i), 1, uintptr(unsafe.Pointer(m2)))
+		runtime.KeepAlive(verts)
+		runtime.KeepAlive(idx)
+		if int32(r) < 0 {
+			continue
+		}
+		var tri []float32
+		for _, k := range idx[:m2.idxCnt] {
+			if int(k)*2+1 < len(verts) {
+				tri = append(tri, verts[k*2], verts[k*2+1], -1)
+			}
+		}
+		xs.mask[i] = tri
+		log.Printf("visibility mask eye %d: %d triangles", i, len(tri)/9)
+	}
 }
 
 func xrCreateActions() error {
@@ -492,14 +552,14 @@ func (x *xrState) blitTo(src *eyeTarget, img uint32) {
 	call(glBlitFramebufferP, 0, 0, uintptr(src.w), uintptr(src.h), 0, 0, uintptr(src.w), uintptr(src.h), glColorBufferBit, 0x2600)
 }
 
-func (x *xrState) mirror(src *eyeTarget, ww, wh int32) {
+func (x *xrState) mirror(srcW, srcH, ww, wh int32) {
 	if ww <= 0 || wh <= 0 {
 		return
 	}
 	call(glBindFramebufferP, glReadFramebuffer, uintptr(x.dstFBO))
 	call(glBindFramebufferP, glDrawFramebuffer, 0)
 	call(glViewportP, 0, 0, uintptr(ww), uintptr(wh))
-	sw, sh := float32(src.w), float32(src.h)
+	sw, sh := float32(srcW), float32(srcH)
 	scale := float32(ww) / sw
 	if s2 := float32(wh) / sh; s2 > scale {
 		scale = s2
@@ -534,7 +594,7 @@ func xrBeginFrameAndLocate() (frameInfo, error) {
 	return fi, nil
 }
 
-func xrRenderAndEnd(fi frameInfo, eyes [2]*eyeTarget, draw func(eye int, t *eyeTarget, proj mat4, view hmdMatrix34, dst uint32)) error {
+func xrRenderAndEnd(fi frameInfo, eyes [2]*eyeTarget, draw func(eye int, t *eyeTarget, proj mat4, view hmdMatrix34, dst uint32, dw, dh int32)) error {
 	layers := uint32(0)
 	if fi.shouldRender {
 		xs.viewArr[0] = xrView{typ: xrTypeView}
@@ -559,10 +619,10 @@ func xrRenderAndEnd(fi frameInfo, eyes [2]*eyeTarget, draw func(eye int, t *eyeT
 				view := inv34(poseTo34(v.pose))
 				call(glBindFramebufferP, glFramebuffer, uintptr(xs.dstFBO))
 				call(glFramebufferTexture2DP, glFramebuffer, glColorAttachment0, glTexture2D, uintptr(xs.images[i][idx].image), 0)
-				draw(i, eyes[i], proj, view, xs.dstFBO)
+				draw(i, eyes[i], proj, view, xs.dstFBO, xs.w[i], xs.h[i])
 				if i == 0 {
 					cw, ch := clientSize()
-					xs.mirror(eyes[i], cw, ch)
+					xs.mirror(xs.w[i], xs.h[i], cw, ch)
 				}
 				call(glBindFramebufferP, glFramebuffer, 0)
 				ri := &xrPlainInfo{typ: xrTypeReleaseInfo}

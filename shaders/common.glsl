@@ -6,6 +6,11 @@ uniform vec3 u_cam;
 #define MAXL 48
 uniform vec4 u_L[MAXL * 3];
 uniform int u_nL;
+// tiled lighting: per 32 px screen tile, which lights can reach it (offset, count into a list)
+uniform int u_tiled;
+uniform usampler2D u_tileHdr;
+uniform usampler2D u_tileIdx;
+uniform float u_tilePx;
 
 // two shadowed ceiling spot lights
 uniform mat4 u_SM[2];
@@ -173,7 +178,18 @@ vec3 shadeAll(vec3 P, vec3 N, vec3 V, vec3 albedo, float metal, float rough) {
     vec3 diff = albedo * (1.0 - metal);
     float a = rough * rough;
     vec3 acc = vec3(0.0);
-    for (int i = 0; i < u_nL; i++) {
+    int cnt = u_nL, off = 0;
+    if (u_tiled == 1) {
+        uvec2 th = texelFetch(u_tileHdr, ivec2(gl_FragCoord.xy / u_tilePx), 0).xy;
+        off = int(th.x);
+        cnt = int(th.y);
+    }
+    for (int k = 0; k < cnt; k++) {
+        int i = k;
+        if (u_tiled == 1) {
+            int j = off + k;
+            i = int(texelFetch(u_tileIdx, ivec2(j & 1023, j >> 10), 0).r);
+        }
         vec3 col; float rad, size;
         vec3 q = lightPoint(i, P, col, rad, size);
         vec3 Lv = q - P;

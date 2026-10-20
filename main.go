@@ -549,7 +549,7 @@ func (e *editor) buildPages() {
 	}
 	e.pageGfx = &page{cols: 2, keyH: 0.056,
 		header: func() []string {
-			return []string{"GRAPHICS QUALITY", "APPLIES INSTANTLY. IF THE HEADSET STUTTERS OR REPROJECTS, GO DOWN ONE"}
+			return append([]string{"GRAPHICS QUALITY", "APPLIES INSTANTLY. IF THE HEADSET STUTTERS OR REPROJECTS, GO DOWN ONE"}, gt.lines()...)
 		},
 		buttons: func() []button {
 			return []button{
@@ -558,6 +558,37 @@ func (e *editor) buildPages() {
 				gfxBtn(2, "2X AA, 1K SHADOWS, LIGHTER FOG"),
 				gfxBtn(3, "NO REFLECTIONS, FEWER LIGHTS"),
 				gfxBtn(4, "BARE MINIMUM: NO AA, SHADOWS, WATER OR HAZE FX"),
+				{label: func() string { return fmt.Sprintf("RENDER SCALE %d%%", int(renderScale*100+0.5)) }, act: func() {
+					k := 0
+					for i, v := range renderScales {
+						if math.Abs(v-renderScale) < 0.01 {
+							k = i
+						}
+					}
+					renderScale = renderScales[(k+1)%len(renderScales)]
+					wantRebuild = true
+					saveGfx(appDir)
+					e.say("Render scale %d%%", int(renderScale*100+0.5))
+				}},
+				{label: func() string {
+					if !vrsOK {
+						return "FOVEATED: NOT SUPPORTED"
+					}
+					return "FOVEATED: " + onoff(foveated)
+				}, on: func() bool { return vrsOK && foveated }, act: func() {
+					if !vrsOK {
+						e.say("Foveated rendering needs an NVIDIA RTX (or GTX 16) GPU")
+						return
+					}
+					foveated = !foveated
+					saveGfx(appDir)
+					e.say("Foveated rendering %s", onoff(foveated))
+				}},
+				{label: func() string { return "OPTIMIZED RENDERING: " + onoff(perfOpt) }, on: func() bool { return perfOpt }, span: 2, act: func() {
+					perfOpt = !perfOpt
+					saveGfx(appDir)
+					e.say("Optimized rendering %s. Compare the GPU time above", onoff(perfOpt))
+				}},
 				{label: func() string { return "BACK" }, act: func() { e.page = e.pageMain }, span: 2},
 			}
 		},
@@ -708,7 +739,7 @@ func (e *editor) buildPages() {
 const (
 	panelW   = 0.56
 	btnGap   = 0.010
-	headerH  = 0.085
+	headerH0 = 0.085
 	footerH  = 0.045
 	textPx   = 0.0027
 	smallPx  = 0.0021
@@ -717,8 +748,14 @@ const (
 
 type slot struct{ cx, cy, w, h float64 }
 
+// pageHeaderH: room for the page's header lines (three fit the standard height)
+func pageHeaderH(p *page) float64 {
+	return max(headerH0, 0.03+float64(len(p.header()))*0.026+0.003)
+}
+
 func (e *editor) layout() ([]slot, float64) {
 	p := e.page
+	headerH := pageHeaderH(p)
 	cols := p.cols
 	cellW := (panelW - 2*panelPad - float64(cols-1)*btnGap) / float64(cols)
 	var slots []slot
@@ -1385,7 +1422,7 @@ func (e *editor) buildPanel() {
 		sprite(e.panelPoint(x, y, 0.003), 0.025, cBeam.alpha(0.7))
 	}
 
-	hdrY := h2 - headerH + 0.008
+	hdrY := h2 - pageHeaderH(e.page) + 0.008
 	ribbon(e.panelPoint(-w2+0.01, hdrY, 0.002), e.panelPoint(w2-0.01, hdrY, 0.002), 0.004, cEnergy.alpha(0.6))
 	bGlowLine.line(e.panelPoint(-w2+0.01, hdrY, 0.002), e.panelPoint(w2-0.01, hdrY, 0.002), cEnergy.alpha(0.8))
 	for i, l := range e.page.header() {
@@ -1586,7 +1623,7 @@ func main() {
 	R = rr
 	var eyes [2]*eyeTarget
 	for i := 0; i < 2; i++ {
-		t, err := newEyeTargetBest(xs.w[i], xs.h[i], int(R.q.samples))
+		t, err := newEyeTargetBest(scaled(xs.w[i]), scaled(xs.h[i]), int(R.q.samples))
 		if err != nil {
 			fail(err.Error())
 		}
@@ -1669,27 +1706,32 @@ func main() {
 			}
 		}
 		ed.updateFloor()
-		if wantQuality >= 0 && wantQuality != R.q.idx() {
-			// rebuild everything at the new quality between frames
-			R.setQuality(wantQuality)
+		if q := wantQuality >= 0 && wantQuality != R.q.idx(); q || wantRebuild {
+			// rebuild everything at the new quality or render scale between frames
+			if q {
+				R.setQuality(wantQuality)
+			}
 			for i := 0; i < 2; i++ {
-				if t, err := newEyeTargetBest(xs.w[i], xs.h[i], int(R.q.samples)); err == nil {
+				if t, err := newEyeTargetBest(scaled(xs.w[i]), scaled(xs.h[i]), int(R.q.samples)); err == nil {
+					freePosts(eyes[i])
 					eyes[i].free()
 					eyes[i] = t
 				} else {
-					log.Printf("quality switch: %v", err)
+					log.Printf("graphics switch: %v", err)
 				}
 			}
 		}
-		wantQuality = -1
+		wantQuality, wantRebuild = -1, false
+		cpu0 := time.Now()
 		ed.cur = ed.page.buttons()
 		ed.buildScene()
 		nl := R.beginFrame(ed.hmd.pos())
-		if err := xrRenderAndEnd(fi, eyes, func(eye int, t *eyeTarget, proj mat4, view hmdMatrix34, dst uint32) {
-			R.renderEye(t, proj, view, ed.hmd.pos(), nl, float32(ed.floorY), dst)
+		if err := xrRenderAndEnd(fi, eyes, func(eye int, t *eyeTarget, proj mat4, view hmdMatrix34, dst uint32, dw, dh int32) {
+			R.renderEye(eye, t, proj, view, ed.hmd.pos(), nl, float32(ed.floorY), dst, dw, dh)
 		}); err != nil {
 			log.Println(err)
 		}
+		gt.cpu += (time.Since(cpu0).Seconds()*1000 - gt.cpu) * 0.05
 		swapBuffers()
 	}
 	xrShutdown()
