@@ -101,6 +101,7 @@ type xrState struct {
 	dstFBO                                 uint32
 	hasMask                                bool
 	mask                                   [2][]float32 // hidden-area triangles per eye, view space
+	maskVer                                int
 }
 
 var xs = &xrState{
@@ -374,6 +375,7 @@ func xrLoadMasks() {
 			}
 		}
 		xs.mask[i] = tri
+		xs.maskVer++
 		log.Printf("visibility mask eye %d: %d triangles", i, len(tri)/9)
 	}
 }
@@ -475,6 +477,8 @@ func xrPollEvents() {
 		switch xs.event.typ {
 		case xrTypeEventLossPending:
 			xs.quit = true
+		case 1000031001: // the runtime changed the lens mask (FOV or IPD setting)
+			xrLoadMasks()
 		case 40:
 			ev := (*xrEventSpaceChange)(unsafe.Pointer(xs.event))
 			log.Printf("reference space %d changed, pose valid %d, pos %.3f %.3f %.3f", ev.refType, ev.poseValid, ev.pose.p.x, ev.pose.p.y, ev.pose.p.z)
@@ -542,14 +546,6 @@ func xrRequestExit() {
 	if xs.session != 0 {
 		xcall("xrRequestExitSession", xs.session)
 	}
-}
-
-func (x *xrState) blitTo(src *eyeTarget, img uint32) {
-	call(glBindFramebufferP, glFramebuffer, uintptr(x.dstFBO))
-	call(glFramebufferTexture2DP, glFramebuffer, glColorAttachment0, glTexture2D, uintptr(img), 0)
-	call(glBindFramebufferP, glReadFramebuffer, uintptr(src.msFBO))
-	call(glBindFramebufferP, glDrawFramebuffer, uintptr(x.dstFBO))
-	call(glBlitFramebufferP, 0, 0, uintptr(src.w), uintptr(src.h), 0, 0, uintptr(src.w), uintptr(src.h), glColorBufferBit, 0x2600)
 }
 
 func (x *xrState) mirror(srcW, srcH, ww, wh int32) {

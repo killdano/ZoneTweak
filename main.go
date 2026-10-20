@@ -586,6 +586,7 @@ func (e *editor) buildPages() {
 				}},
 				{label: func() string { return "OPTIMIZED RENDERING: " + onoff(perfOpt) }, on: func() bool { return perfOpt }, span: 2, act: func() {
 					perfOpt = !perfOpt
+					wantRebuild = true
 					saveGfx(appDir)
 					e.say("Optimized rendering %s. Compare the GPU time above", onoff(perfOpt))
 				}},

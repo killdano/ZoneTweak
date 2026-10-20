@@ -89,13 +89,16 @@ func hasGLExt(name string) bool {
 }
 
 func cStr(p uintptr) string {
-	bp := *(**[256]byte)(unsafe.Pointer(&p)) // a driver-owned, NUL-terminated string
-	for i, c := range bp {
+	base := *(*unsafe.Pointer)(unsafe.Pointer(&p)) // a driver-owned, NUL-terminated string
+	var b []byte
+	for i := 0; i < 256; i++ {
+		c := *(*byte)(unsafe.Add(base, i))
 		if c == 0 {
-			return string(bp[:i])
+			break
 		}
+		b = append(b, c)
 	}
-	return string(bp[:])
+	return string(b)
 }
 
 // ---- settings: graphics.txt holds the preset name, then options ----
@@ -149,6 +152,7 @@ type eyeExtras struct {
 	tileIdx    uint32
 	tiles      lightTiles
 	tileIdxRow int32
+	hdrW, hdrH int32
 }
 
 func (r *renderer) extrasFor(t *eyeTarget) *eyeExtras {
@@ -157,7 +161,7 @@ func (r *renderer) extrasFor(t *eyeTarget) *eyeExtras {
 		return p.ex
 	}
 	ex := &eyeExtras{}
-	if r.q.mirror {
+	if r.q.mirror && perfOpt {
 		// rendered with a little MSAA into its own buffer, resolved into a texture the floor reads
 		k := 0.7
 		if r.q.name == "MEDIUM" {
@@ -210,7 +214,7 @@ func (r *renderer) fovea(t *eyeTarget, ex *eyeExtras, proj mat4) bool {
 	if !vrsOK || !foveated || r.q.potato() {
 		return false
 	}
-	if ex.rateTex == 0 || ex.rateKey != proj {
+	if ex.rateTex == 0 || !nearMat(ex.rateKey, proj) {
 		delOne(glDeleteTexturesP, ex.rateTex)
 		m, nx, ny := rateMap(&proj, int(t.w), int(t.h), int(vrsTW), int(vrsTH), foveaInner, foveaMiddle)
 		ex.rateTex = genOne(glGenTexturesP)
@@ -229,6 +233,16 @@ func (r *renderer) fovea(t *eyeTarget, ex *eyeExtras, proj mat4) bool {
 	return true
 }
 
+// nearMat: the projection is the same lens setup (ignores tiny per-frame wobble)
+func nearMat(a, b mat4) bool {
+	for i := range a {
+		if d := a[i] - b[i]; d > 0.01 || d < -0.01 {
+			return false
+		}
+	}
+	return true
+}
+
 func foveaOff() {
 	if vrsOK {
 		call(glDisableP, glShadingRateImageNV)
@@ -243,10 +257,23 @@ func (ex *eyeExtras) uploadTiles(vp mat4, lights []float32, n int, w, h int32) b
 		return false
 	}
 	call(glPixelStoreiP, glUnpackAlignment, 1)
+	rows := int32(len(lt.idx) / tileIdxW)
 	call(glBindTextureP, glTexture2D, uintptr(ex.tileHdr))
-	call(glTexImage2DP, glTexture2D, 0, glRG32UI, uintptr(lt.tx), uintptr(lt.ty), 0, glRGInteger, glUnsignedIntType, uintptr(unsafe.Pointer(&lt.hdr[0])))
+	if ex.hdrW == int32(lt.tx) && ex.hdrH == int32(lt.ty) {
+		call(glTexSubImage2DP, glTexture2D, 0, 0, 0, uintptr(lt.tx), uintptr(lt.ty), glRGInteger, glUnsignedIntType, uintptr(unsafe.Pointer(&lt.hdr[0])))
+	} else {
+		call(glTexImage2DP, glTexture2D, 0, glRG32UI, uintptr(lt.tx), uintptr(lt.ty), 0, glRGInteger, glUnsignedIntType, uintptr(unsafe.Pointer(&lt.hdr[0])))
+		ex.hdrW, ex.hdrH = int32(lt.tx), int32(lt.ty)
+	}
 	call(glBindTextureP, glTexture2D, uintptr(ex.tileIdx))
-	call(glTexImage2DP, glTexture2D, 0, glR8UI, tileIdxW, uintptr(len(lt.idx)/tileIdxW), 0, glRedInteger, glUnsignedByteType, uintptr(unsafe.Pointer(&lt.idx[0])))
+	if rows <= ex.tileIdxRow {
+		call(glTexSubImage2DP, glTexture2D, 0, 0, 0, tileIdxW, uintptr(rows), glRedInteger, glUnsignedByteType, uintptr(unsafe.Pointer(&lt.idx[0])))
+	} else {
+		// grown: allocate with headroom so it rarely has to grow again
+		ex.tileIdxRow = rows + 8
+		call(glTexImage2DP, glTexture2D, 0, glR8UI, tileIdxW, uintptr(ex.tileIdxRow), 0, glRedInteger, glUnsignedByteType, 0)
+		call(glTexSubImage2DP, glTexture2D, 0, 0, 0, tileIdxW, uintptr(rows), glRedInteger, glUnsignedByteType, uintptr(unsafe.Pointer(&lt.idx[0])))
+	}
 	call(glBindTextureP, glTexture2D, 0)
 	call(glPixelStoreiP, glUnpackAlignment, 4)
 	return true
@@ -270,6 +297,10 @@ func (r *renderer) bindTiles(p *prog, ex *eyeExtras, on bool) {
 func (r *renderer) drawMask(eye int, proj mat4) {
 	if eye < 0 || eye > 1 || len(xs.mask[eye]) == 0 {
 		return
+	}
+	if r.maskVer[eye] != xs.maskVer {
+		delOne(glDeleteBuffersP, r.maskVBO[eye])
+		r.maskVBO[eye], r.maskVer[eye] = 0, xs.maskVer
 	}
 	if r.maskVBO[eye] == 0 {
 		call(glGenBuffersP, 1, uintptr(unsafe.Pointer(&gIDs[0])))

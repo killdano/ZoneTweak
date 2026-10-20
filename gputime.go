@@ -63,8 +63,10 @@ func (g *gpuTimes) frame() {
 	g.cur = (g.cur + 1) % gpuRing
 	s := &g.ring[g.cur]
 	if s.issued && s.n > 1 {
-		var avail int32
-		call(glGetQueryObjectivP, uintptr(s.ids[s.n-1]), glQueryResultAvailable, uintptr(unsafe.Pointer(&avail)))
+		avail := int32(1)
+		for i := 0; i < s.n && avail != 0; i++ {
+			call(glGetQueryObjectivP, uintptr(s.ids[i]), glQueryResultAvailable, uintptr(unsafe.Pointer(&avail)))
+		}
 		if avail != 0 {
 			ts := make([]uint64, s.n)
 			for i := 0; i < s.n; i++ {
@@ -127,9 +129,8 @@ func (g *gpuTimes) lines() []string {
 	for _, nm := range g.order {
 		parts = append(parts, fmt.Sprintf("%s %.1f", nm, g.avg[nm]))
 	}
-	b, c := parts, []string(nil)
 	if len(parts) > 4 {
-		b, c = parts[:4], parts[4:]
+		return []string{a, strings.Join(parts[:4], "  "), strings.Join(parts[4:], "  ")}
 	}
-	return []string{a, strings.Join(b, "  "), strings.Join(c, "  ")}
+	return []string{a, strings.Join(parts, "  ")}
 }

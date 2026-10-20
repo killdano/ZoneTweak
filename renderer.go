@@ -181,8 +181,9 @@ type rtex struct {
 
 type renderer struct {
 	lit, floor, glow, sprite, smoke, flame, shadow, fog, fogcomp, bdown, bup, final *prog
-	mask                                                                            *prog
+	mask, depth                                                                     *prog
 	maskVBO                                                                         [2]uint32
+	maskVer                                                                         [2]int
 	staticChunks                                                                    []chunk
 	vao                                                                             uint32
 	vbos                                                                            map[any]uint32
@@ -287,6 +288,7 @@ func newRenderer(qi int) (*renderer, error) {
 	mk(&r.bup, "post.vs", "bloomup.fs", false)
 	mk(&r.final, "post.vs", "final.fs", false)
 	mk(&r.mask, "mask.vs", "mask.fs", false)
+	mk(&r.depth, "lit.vs", "depth.fs", false)
 	if err != nil {
 		return nil, err
 	}
@@ -741,15 +743,17 @@ func (r *renderer) renderEye(eye int, t *eyeTarget, proj mat4, view hmdMatrix34,
 	call(glDisableP, glBlend)
 	if perfOpt {
 		call(glColorMaskP, 0, 0, 0, 0)
-		call(glUseProgramP, uintptr(r.shadow.id))
-		r.shadow.m4("u_vp", vp)
+		call(glUseProgramP, uintptr(r.depth.id))
+		r.depth.m4("u_vp", vp)
 		r.drawStatic(cv)
 		drawGenPartsIn(cv)
 		drawB(&bEnv, glTriangles)
 		call(glColorMaskP, 1, 1, 1, 1)
 		gt.mark("PREPASS")
 	}
-	call(glDepthFuncP, glDepthFuncLEqual)
+	if perfOpt {
+		call(glDepthFuncP, glDepthFuncLEqual)
+	}
 	fov := perfOpt && r.fovea(t, ex, proj)
 
 	call(glEnableP, glBlend)

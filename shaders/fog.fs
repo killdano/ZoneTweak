@@ -51,7 +51,7 @@ void main() {
     float d = texture(u_depth, v_uv).r;
     d = max(d, texture(u_depth, v_uv + vec2(ts.x, 0)).r);
     d = max(d, texture(u_depth, v_uv + vec2(0, ts.y)).r);
-    if (d <= 0.0) { o_col = vec4(0.0, 0.0, 0.0, 1.0); return; } // behind the lens edge: never seen
+    if (d < 1e-4) { o_col = vec4(0.0, 0.0, 0.0, 1.0); return; } // behind the lens edge: never seen
     vec3 P = worldAt(v_uv, d);
     vec3 ro = u_cam;
     vec3 rd = P - ro;
