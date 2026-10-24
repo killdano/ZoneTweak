@@ -729,13 +729,8 @@ func (g *game) drawHands() {
 	t := fxTime()
 	g.drawFit()
 	g.drawPulls()
-	// just in from ZoneTweak: the white of the lever's flash clears, and the controllers you
-	// had are gloves now, still glinting
+	// just in from ZoneTweak: the controllers you had are gloves now, still glinting
 	in := t - gloveIn
-	if in >= 0 && in < 0.6 {
-		k := 1 - in/0.6
-		sprite(ed.hmd.pos().add(ed.hmd.axis(2).mul(-0.3)), 2, rgba{1, 0.95, 0.9, float32(0.9 * k * k)})
-	}
 	for _, gh := range hands {
 		if !gh.valid() {
 			continue

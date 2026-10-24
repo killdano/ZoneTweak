@@ -32,7 +32,7 @@ pick:
   floor hatch, overload) while the boundary updates instantly.
 - **Set dressing (visual only)**: the boundary is drawn as laser walls between generator
   posts in a grim industrial prison, with robots that repair, salvage and fight the
-  occasional fire. All procedural, with a fully synthesized sound engine. None of it is
+  occasional fire, and Contraband's leech drones drifting about overhead. All procedural, with a fully synthesized sound engine. None of it is
   written to Pimax.
 - **Graphics presets**: from Ultra down to Potato, applied instantly, plus a render scale,
   fixed foveated rendering on NVIDIA GPUs and live per-pass GPU timings on the graphics page.
@@ -43,9 +43,9 @@ The full user manual is in [`docs/MANUAL.txt`](docs/MANUAL.txt).
 
 *Tweak your zone. Then defend it.*
 
-ZoneTweak has a game built in. A red lever stands just inside your boundary under a
-**PLAY CONTRABAND** sign. Grab it and pull it down and your controllers turn into
-gloves: the room you just shaped is now a prison cell, and you have to hold it.
+ZoneTweak has a game built in. Press **PLAY CONTRABAND** at the top of the menu: the view
+fades to black and comes back with your controllers turned into gloves. The room you just
+shaped is now a prison cell, and you have to hold it.
 
 - **The goal:** a half-built EMP sits on a cart in your room. Finish it by hand,
   stage by stage, then start its engine and hit the big red button. If a warden
@@ -68,8 +68,7 @@ gloves: the room you just shaped is now a prison cell, and you have to hold it.
 - **The radio:** your contact only talks into the handset. Pick it up to hear the
   next wave, where your tools are, and how to fix the EMP when it misfires.
 
-Pull the lever or press PLAY CONTRABAND on the menu to start. To come back, open the
-pause menu (**B**) and pick **BACK TO ZONETWEAK**. To launch straight into the game,
+To come back, open the pause menu (**B**) and pick **BACK TO ZONETWEAK**. To launch straight into the game,
 use `ZoneTweak.exe --play`. The full guide covers the controls, every stage, every
 game and the misfire repair: [`docs/HOW-TO-PLAY.txt`](docs/HOW-TO-PLAY.txt).
 

@@ -35,14 +35,13 @@ CONTROLS (either hand)
   The beam's floor ring is where it acts; the faint big ring is the grab range.
 
 CONTRABAND (the bonus game)
-  A red lever on a post stands just inside your boundary, under a PLAY CONTRABAND sign.
-  Put a controller on its handle, hold the grip or the trigger and pull it toward you
-  and down (or press PLAY CONTRABAND at the top of the menu): your controllers turn into
-  gloves and you're defending the boundary you've just made, saved or not. The game's
-  pause menu has BACK TO ZONETWEAK, and you come back to your edits as you left them.
-  How to play: docs/HOW-TO-PLAY.txt. The floor and graphics settings are shared.
-  The lever stands half a metre in from your longest wall and moves when you reshape
-  the boundary (once you let go of what you're dragging).
+  PLAY CONTRABAND, the big red button at the top of the menu: the view fades to black and
+  comes back as the game, in the boundary you've just made (saved or not), with your
+  controllers turned into gloves. The game's pause menu has BACK TO ZONETWEAK: another fade
+  and you're back to your edits as you left them. How to play: HOW-TO-PLAY.txt. The floor
+  and graphics settings are shared. ZoneTweak.exe --play starts straight in the game.
+  Its leech drones drift about the cell up above your generators in ZoneTweak too (set
+  dressing: they keep over the generators and robots, under the lamps, and apart).
 
 NEW OUTLINE (menu)
   Walk to each real corner, hold the controller over it, pull the trigger.

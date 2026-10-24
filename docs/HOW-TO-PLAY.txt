@@ -12,12 +12,10 @@ into place are the walls you defend.
 START
 -----
 1. Set up your play space in ZoneTweak (or in Pimax Play / SteamVR) as usual.
-2. In ZoneTweak, find the red lever on a post just inside your boundary, under the
-   PLAY CONTRABAND sign. Put a controller on its handle, hold the grip (or the
-   trigger) and haul it toward you and down. Your controllers turn into gloves and
-   the game starts in the boundary you've got (saved or not). PLAY CONTRABAND on
-   ZoneTweak's menu does the same.
-3. Pause menu (B pointing at nothing) > BACK TO ZONETWEAK takes you back to editing,
+2. In ZoneTweak, press B for the menu and pick PLAY CONTRABAND (the big red button
+   at the top). The view fades to black and comes back in the game, in the boundary
+   you've got (saved or not), with your controllers turned into gloves.
+3. Pause menu (B pointing at nothing) > BACK TO ZONETWEAK fades you back to editing,
    with everything as you left it. The results board after a round has it too.
 4. A desktop shortcut can go straight into the game: add --play to its Target
    ("C:\Games\ZoneTweak\ZoneTweak.exe" --play).
@@ -277,10 +275,10 @@ CHANGES
 
 BUILD 14
 --------
-- Contraband lives inside ZoneTweak now: a lever and a PLAY CONTRABAND sign stand just
-  inside your boundary (and PLAY CONTRABAND is on ZoneTweak's menu). Pull it and the
-  controllers become gloves; the pause menu's BACK TO ZONETWEAK returns. One app, one
-  log (zonetweak.log), one floor, one set of graphics settings.
+- Contraband lives inside ZoneTweak now: PLAY CONTRABAND at the top of ZoneTweak's menu
+  fades to black and into the game (the controllers become gloves); the pause menu's
+  BACK TO ZONETWEAK fades back. ZoneTweak's own room stays as it was: just your
+  generators. One app, one log (zonetweak.log), one floor, one set of graphics settings.
 - Five new device games: FREQUENCY, SAFE, SWITCHBOARD, VALVES and FAR SIDE (see THE
   DEVICE'S GAMES). A round's two game stages are always different games.
 - The prod starts in a bracket on one of the generators (which one changes every

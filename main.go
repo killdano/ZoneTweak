@@ -21,13 +21,6 @@ import (
 	"time"
 )
 
-const (
-	modeZone = iota // ZoneTweak, the editor
-	modeGame        // Contraband
-)
-
-var appMode = modeZone
-
 func fail(msg string) {
 	log.Println("FATAL:", msg)
 	messageBox("ZoneTweak", msg)
@@ -263,8 +256,8 @@ func main() {
 		ed.say("Back in ZoneTweak")
 		log.Printf("back to ZoneTweak")
 	}
-	onPlay = func() { wantMode = modeGame }
-	onLeave = func() { wantMode = modeZone }
+	onPlay = func() { startFade(modeGame) }
+	onLeave = func() { startFade(modeZone) }
 	canLeave = st != nil
 	onTraced = func(P []pt2) {
 		saveTraced(dir, stageFix.inv().all(P))
@@ -296,7 +289,7 @@ func main() {
 	if st == nil || play {
 		enterGame()
 	} else {
-		ed.say("%s boundary, universe %s, %d points. B opens the menu", boundarySys, st.uniID, len(st.pts))
+		ed.say("%s boundary, universe %s, %d points. B opens the menu (and Contraband)", boundarySys, st.uniID, len(st.pts))
 	}
 
 	exitRequested := false
@@ -329,15 +322,17 @@ func main() {
 			keepAwake() // you're in the headset: no blanking the monitors
 			awakeAt = time.Now()
 		}
-		switch {
-		case wantMode == modeGame:
-			enterGame()
-		case wantMode == modeZone:
-			leaveGame()
-		}
-		wantMode = -1
 		frameDT = math.Max(0.001, math.Min(0.1, time.Since(lastFrame).Seconds()))
 		lastFrame = time.Now()
+		// a switch between ZoneTweak and the game: fade to black, swap over, fade back in
+		switch fadeStep(frameDT) {
+		case modeGame:
+			enterGame()
+			lastFrame = time.Now() // building the game took a while: don't count it as a frame
+		case modeZone:
+			leaveGame()
+			lastFrame = time.Now()
+		}
 		if appMode == modeGame && watch.check() {
 			movedSay()
 		}

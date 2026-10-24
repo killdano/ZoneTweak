@@ -503,6 +503,29 @@ func (g *game) drawDrone(b *sim.Robot) {
 		// lean into the direction of travel
 		up = up.add(f.mul(0.18 * b.Moving)).norm()
 	}
+	drawDroneBody(pos, s, up, f, b.Alive(), attached, ph)
+	eye := xf{pos, s, up, f}.p(0, 0, 0.125)
+	if attached && b.Alive() && r.Gens[b.Gen].State == sim.GenLeeched {
+		// draining: red pulses down a cable into the generator
+		gp := fv(r.Gens[g.leechPost(b.Gen)].Pos, 1.1)
+		k := 0.5 + 0.5*math.Sin(t*6+ph)
+		ribbon(eye, gp, 0.012, cRobotEye.alpha(float32(0.4*k)))
+		sprite(pos, 0.25, cDanger.alpha(float32(0.18*k)))
+		addPoint(pos, cDanger, 1.5*k, 2)
+		if rand.Float64() < frameDT*4 {
+			spawnSparks(gp, f.mul(-1), 4, 0.4)
+		}
+	}
+	if !b.Alive() && b.DeadT < 2 && rand.Float64() < frameDT*6 {
+		spawnSmoke(pos, 1)
+	}
+	shadowBlob(pv(b.Pos), 0.2, float32(0.5*math.Max(0, 1-(h-0.2)/2)))
+}
+
+// drawDroneBody: a leech drone - its hull, four rotors, the red eye and the claws (open in
+// flight, clamped when it's on a generator). ZoneTweak's roaming drones use it too.
+func drawDroneBody(pos, s, up, f vec3, alive, attached bool, ph float64) {
+	t := fxTime()
 	F := xf{pos, s, up, f}
 	defer withTex(F)()
 	useMat(mPaint)
@@ -515,7 +538,7 @@ func (g *game) drawDrone(b *sim.Robot) {
 		hub := F.p(sx*0.17, 0.03, sz*0.15)
 		cyl(&bEnv, F.p(sx*0.06, 0.02, sz*0.06), hub, 0.012, 0.01, 6, cIron, false)
 		cyl(&bEnv, hub.sub(up.mul(0.03)), hub.add(up.mul(0.02)), 0.022, 0.022, 10, cIron, true)
-		if b.Alive() {
+		if alive {
 			// spinning rotor: a faint disc and a blade flicker
 			for q := 0; q < 2; q++ {
 				a := t*60 + float64(q)*math.Pi/2 + float64(k)
@@ -529,7 +552,7 @@ func (g *game) drawDrone(b *sim.Robot) {
 	curEmis = 4
 	hemi(&bEnv, eye, f, 0.028, cRobotEye, 3, 10)
 	curEmis = 1
-	if b.Alive() {
+	if alive {
 		fk := float32(0.7 + 0.3*math.Sin(t*9+ph))
 		sprite(eye.add(f.mul(0.02)), 0.08, cRobotEye.alpha(0.5*fk))
 		addPoint(eye.add(f.mul(0.1)), cRobotEye, 0.8, 2)
@@ -547,21 +570,6 @@ func (g *game) drawDrone(b *sim.Robot) {
 		tip := root.add(f.mul(0.09)).add(d.mul(0.04 * open))
 		cyl(&bEnv, root, tip, 0.008, 0.006, 6, cSteelEnv, true)
 	}
-	if attached && b.Alive() && r.Gens[b.Gen].State == sim.GenLeeched {
-		// draining: red pulses down a cable into the generator
-		gp := fv(r.Gens[g.leechPost(b.Gen)].Pos, 1.1)
-		k := 0.5 + 0.5*math.Sin(t*6+ph)
-		ribbon(eye, gp, 0.012, cRobotEye.alpha(float32(0.4*k)))
-		sprite(pos, 0.25, cDanger.alpha(float32(0.18*k)))
-		addPoint(pos, cDanger, 1.5*k, 2)
-		if rand.Float64() < frameDT*4 {
-			spawnSparks(gp, f.mul(-1), 4, 0.4)
-		}
-	}
-	if !b.Alive() && b.DeadT < 2 && rand.Float64() < frameDT*6 {
-		spawnSmoke(pos, 1)
-	}
-	shadowBlob(pv(b.Pos), 0.2, float32(0.5*math.Max(0, 1-(h-0.2)/2)))
 }
 
 // ---- banners: the big messages floating in front of you ----

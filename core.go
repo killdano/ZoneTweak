@@ -92,6 +92,8 @@ type button struct {
 	act   func()
 	span  int
 	on    func() bool
+	big   bool   // a tall, lit button (PLAY CONTRABAND)
+	sub   string // a second, smaller line under a big button's label
 }
 
 type page struct {

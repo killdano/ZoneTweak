@@ -946,6 +946,7 @@ func (r *renderer) renderEye(eye int, t *eyeTarget, proj mat4, view hmdMatrix34,
 	r.final.f1("u_bloomAmt", r.q.bloomAmt)
 	r.final.f1("u_exposure", r.q.exposure)
 	r.final.f1("u_frame", r.frame)
+	r.final.f1("u_fade", float32(screenFade))
 	fullscreen()
 	gt.mark("POST")
 	call(glUseProgramP, 0)

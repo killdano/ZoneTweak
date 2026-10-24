@@ -18,3 +18,29 @@ func staticChanged(v int)                                     {}
 
 func qualityName() string { return "PREVIEW" }
 func cycleQuality()       {}
+
+// the graphics settings ZoneTweak's menu shows (the renderer is Windows-only)
+var (
+	qualities          = []struct{ name string }{{"ULTRA"}, {"HIGH"}, {"MEDIUM"}, {"LOW"}, {"POTATO"}}
+	qualityIdx, appDir = 2, ""
+	wantQuality        = -1
+	wantRebuild        bool
+	renderScale        = 1.0
+	renderScales       = []float64{1, 0.9, 0.8, 0.7}
+	vrsOK, foveated    bool
+	foveaDeg           = 30.0
+	foveaSizes         = []float64{20, 30, 40}
+	foveaEdge          int
+	foveaLabels        = []string{"HALF", "QUARTER", "SIXTEENTH"}
+	perfOpt            = true
+)
+
+func saveQuality(dir string, i int) {}
+func saveGfx(dir string)            {}
+func steamvrReload() error          { return nil }
+
+type gpuStub struct{ cpu float64 }
+
+func (g *gpuStub) lines() []string { return nil }
+
+var gt = &gpuStub{}

@@ -14,7 +14,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -358,15 +357,31 @@ func main() {
 		}
 	}
 	armDebug = os.Getenv("ARMDBG") != ""
-	G.buildScene()
-	if v := os.Getenv("LEVER"); v != "" {
-		// ZoneTweak's way into the game, stood in this room (the editor itself is Windows-only)
-		zLever.placed = nil
-		zLever.place(G.room, false)
-		fmt.Sscanf(v, "%f", &zLever.l.ang)
-		zLever.draw(ed.hands)
-		log.Printf("lever at %.2f, %.2f facing %.2f, %.2f", zLever.at[0], zLever.at[1], zLever.face[0], zLever.face[1])
+	if v := os.Getenv("ZONE"); v != "" {
+		// ZoneTweak's own view of this room (the game put away); ZONE=menu opens its menu
+		resetEngineForZone()
+		ed.st = &store{uniID: "31", pts: clonePts(room), height: 2.4, playArea: [2]float64{2.4, 2.4}, unis: map[string]*uniInfo{}}
+		ed.lib = spaceLib{dir: os.TempDir()}
+		ed.prof = newPimaxProfile()
+		ed.zone = ed.prof
+		ed.loadFromStore()
+		ed.buildPages()
+		if v == "menu" {
+			ed.openMenu()
+		}
+		for k := 0; k < 90; k++ {
+			simClock += dt
+			frameDT = dt
+			ed.cur = ed.page.buttons()
+			ed.buildScene()
+		}
+		for _, d := range zDrones {
+			fmt.Fprintf(os.Stderr, "drone at %.2f,%.2f,%.2f\n", d.pos[0], d.h, d.pos[1])
+		}
+	} else {
+		G.buildScene()
 	}
+
 	if v := os.Getenv("THIRD"); v != "" {
 		// render from somewhere else than the head (to look at the arms from outside)
 		var a, b vec3

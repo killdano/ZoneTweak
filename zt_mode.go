@@ -7,8 +7,60 @@ package main
 
 import "math"
 
-// wantMode: a switch asked for this frame (-1: none), done between frames by the main loop.
-var wantMode = -1
+const (
+	modeZone = iota // ZoneTweak, the editor
+	modeGame        // Contraband
+)
+
+var appMode = modeZone
+
+// onPlay: ZoneTweak's PLAY CONTRABAND (the VR build fades to black and starts the game).
+var onPlay func()
+
+// screenFade: how black the picture is (0 clear .. 1 black; the final pass darkens by it).
+// Switching modes fades to black, swaps everything over, and fades back in.
+var screenFade float64
+
+var (
+	fadeTo   = -1 // the mode it's fading out to (-1: not switching)
+	fadeDir  int  // +1 going black, -1 coming back
+	fadeHold int  // frames held at black (the switch can take a frame or two to build)
+)
+
+const (
+	fadeOut = 0.45 // seconds to black
+	fadeIn  = 0.6  // seconds back
+)
+
+// startFade: fade out and switch to mode m (ignored while a switch is under way).
+func startFade(m int) {
+	if fadeDir != 0 {
+		return
+	}
+	fadeTo, fadeDir = m, 1
+}
+
+// fadeStep: a frame of the fade. Returns the mode to switch to now (at black), or -1.
+func fadeStep(dt float64) int {
+	switch fadeDir {
+	case 1:
+		screenFade = math.Min(1, screenFade+dt/fadeOut)
+		if screenFade >= 1 {
+			fadeHold++
+			if fadeHold >= 2 {
+				m := fadeTo
+				fadeTo, fadeDir, fadeHold = -1, -1, 0
+				return m
+			}
+		}
+	case -1:
+		screenFade = math.Max(0, screenFade-dt/fadeIn)
+		if screenFade <= 0 {
+			fadeDir = 0
+		}
+	}
+	return -1
+}
 
 // onLeave: the game's pause menu asks to go back to ZoneTweak (the VR build sets it);
 // canLeave says there's an editor to go back to (there isn't with no boundary files).
@@ -35,7 +87,6 @@ func takeZoneSnap() zoneSnap {
 		drawing: e.drawing, matching: e.matching, areaM: e.areaMode}
 	e.menuOpen, e.drawing, e.matching, e.areaMode = false, false, false, false
 	e.releaseAll()
-	zLever.by, zLever.fired = nil, false
 	audioSet(0, 0, 0, 0, 0)
 	audioRobots(0, 0, 0, 0)
 	return s
@@ -73,5 +124,4 @@ func resetEngineForZone() {
 			gh.held, gh.hover, gh.building, gh.beam = nil, nil, false, false
 		}
 	}
-	zLever.placed = nil // stand it again for the boundary as it is
 }

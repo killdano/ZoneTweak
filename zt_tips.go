@@ -3,7 +3,7 @@ package main
 import "strings"
 
 var buttonTips = []struct{ prefix, tip string }{
-	{"PLAY CONTRABAND", "The bonus game: defend the room you just shaped. Same as pulling the red lever by your boundary. The pause menu brings you back."},
+	{"PLAY CONTRABAND", "The bonus game: defend the room you just shaped (saved or not). The game's pause menu brings you back here, your edits as you left them."},
 	{"SAVE & RESTART", "Saves everything, closes ZoneTweak and restarts the Pimax service so your changes load right away."},
 	{"SAVE AS NEW", "Name and store the outline you see now as a saved space, like DOOR OPEN or DOOR CLOSED."},
 	{"SAVED SPACES", "Store named boundaries (door open, door closed...) and switch between them with one press."},

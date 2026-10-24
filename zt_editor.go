@@ -1,5 +1,3 @@
-//go:build windows
-
 package main
 
 // ZoneTweak: the boundary editor (the app's main mode). Contraband, the game, is reached from
@@ -186,7 +184,7 @@ func (e *editor) buildPages() {
 		},
 		buttons: func() []button {
 			return []button{
-				{label: func() string { return "PLAY CONTRABAND" }, span: 2, on: func() bool { return true }, act: func() {
+				{label: func() string { return "PLAY CONTRABAND" }, sub: "THE BONUS GAME - NOW DEFEND YOUR ZONE", span: 2, big: true, act: func() {
 					e.menuOpen = false
 					if onPlay != nil {
 						onPlay()
@@ -667,26 +665,30 @@ func (e *editor) layout() ([]slot, float64) {
 	cols := p.cols
 	cellW := (panelW - 2*panelPad - float64(cols-1)*btnGap) / float64(cols)
 	var slots []slot
-	col, row := 0, 0
+	col := 0
+	y, rowH := -headerH, 0.0 // the top of the row being filled, and its height so far
 	for _, b := range e.cur {
 		span := max(b.span, 1)
 		if col+span > cols {
-			col, row = 0, row+1
+			y, col, rowH = y-rowH-btnGap, 0, 0
+		}
+		h := p.keyH
+		if b.big {
+			h = p.keyH * 1.8
 		}
 		w := cellW*float64(span) + btnGap*float64(span-1)
 		x := -panelW/2 + panelPad + float64(col)*(cellW+btnGap) + w/2
-		y := -headerH - float64(row)*(p.keyH+btnGap) - p.keyH/2
-		slots = append(slots, slot{x, y, w, p.keyH})
+		slots = append(slots, slot{x, y - h/2, w, h})
+		rowH = math.Max(rowH, h)
 		col += span
 		if col >= cols {
-			col, row = 0, row+1
+			y, col, rowH = y-rowH-btnGap, 0, 0
 		}
 	}
-	rows := row
 	if col > 0 {
-		rows++
+		y -= rowH + btnGap
 	}
-	H := headerH + float64(rows)*(p.keyH+btnGap) + footerH
+	H := -y + footerH
 	for i := range slots {
 		slots[i].cy += H / 2
 	}
@@ -799,9 +801,6 @@ func (e *editor) handleHand(h *hand) {
 		return
 	}
 	if e.menuOpen && (h.btn >= 0 || h.menuRay) {
-		return
-	}
-	if !e.drawing && !e.matching && !e.areaMode && h.grab < 0 && h.areaGrab == 0 && zLever.handle(h) {
 		return
 	}
 	if h != e.laserHand {
@@ -1040,15 +1039,6 @@ func (e *editor) buildScene() {
 	e.updateDeploys()
 	e.buildEnvironment()
 	e.updateFaults(0)
-	busy := e.drawing || e.matching || e.areaMode
-	for _, h := range e.hands {
-		busy = busy || h.grab >= 0 || h.areaGrab != 0
-	}
-	zLever.place(e.pts, busy)
-	if !e.drawing {
-		zLever.draw(e.hands)
-	}
-	zLever.frame()
 
 	level := e.proximityLevel()
 	e.drawArea()
@@ -1157,6 +1147,8 @@ func (e *editor) buildScene() {
 	e.drawBaseStations()
 	touching := e.updateWallContacts(frameDT)
 	e.updateRobots(frameDT)
+	e.dronesFrame(frameDT)
+	e.drawDrones()
 	updateParticles(frameDT)
 	hv, hp := e.humFor()
 	cr := 0.0
@@ -1314,6 +1306,9 @@ func (e *editor) buildPanel() {
 		if on {
 			col = rgba{0.08, 0.2, 0.14, 1}
 		}
+		if b.big {
+			col = rgba{0.26, 0.07, 0.05, 1}
+		}
 		if hot[i] {
 			z = 0.008
 			col = rgba{0.16, 0.24, 0.22, 1}
@@ -1326,8 +1321,29 @@ func (e *editor) buildPanel() {
 			e.panelQuad(&bGlowTri, x0+0.003, y0+0.003, x1-0.003, y1-0.003, face, cEnergy.alpha(0.18*pulse), cEnergy.alpha(0.32*pulse))
 			e.panelGlowRect(x0, y0, x1, y1, face+0.0005, cEnergy.alpha(0.9*pulse), 0.4)
 			sprite(e.panelPoint(s.cx, s.cy, face-0.006), s.w*0.7, cEnergy.alpha(0.12))
+		} else if b.big {
+			pulse := float32(0.6 + 0.4*math.Sin(t*3))
+			e.panelQuad(&bGlowTri, x0+0.003, y0+0.003, x1-0.003, y1-0.003, face, cDanger.alpha(0.1*pulse), cDanger.alpha(0.22*pulse))
+			e.panelGlowRect(x0, y0, x1, y1, face+0.0005, cDanger.alpha(0.8*pulse), 0.4)
 		} else {
 			e.panelGlowRect(x0+0.002, y0+0.002, x1-0.002, y1-0.002, face, cBeam.alpha(0.18), 0)
+		}
+		if b.big {
+			px := textPx * 1.9
+			if tw := float64(textWidth(label)) * px; tw > s.w-0.03 {
+				px = (s.w - 0.03) / float64(textWidth(label))
+			}
+			lc := rgba{1, 0.35, 0.28, 1}
+			if hot[i] {
+				lc = cWhite
+			}
+			drawTextCentered(&bOpaque, label, e.panelPoint(s.cx, s.cy+0.011, face+0.0008), R, U, px, lc)
+			spx := smallPx
+			if tw := float64(textWidth(b.sub)) * spx; tw > s.w-0.03 {
+				spx = (s.w - 0.03) / float64(textWidth(b.sub))
+			}
+			drawTextCentered(&bOpaque, b.sub, e.panelPoint(s.cx, s.cy-0.026, face+0.0008), R, U, spx, cAmber)
+			continue
 		}
 		if on {
 			a, b := e.panelPoint(x0+0.006, y0+0.008, face+0.0005), e.panelPoint(x0+0.006, y1-0.008, face+0.0005)
