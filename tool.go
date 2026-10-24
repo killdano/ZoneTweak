@@ -1,5 +1,3 @@
-//go:build windows
-
 package main
 
 import (
@@ -367,7 +365,7 @@ func (e *editor) drawDeploy(d *deploy, p pt2, H float64, prev, next pt2) bool {
 		return false
 	}
 	up := v3(0, 1, 0)
-	col := cEnergy
+	col := glowCol // magenta for a maze station
 	defer cleanRoles()()
 	matSpec, matGloss = 0.7, 34
 	defer func() { matSpec, matGloss = 0.5, 28 }()
@@ -414,9 +412,9 @@ func (e *editor) drawDeploy(d *deploy, p pt2, H float64, prev, next pt2) bool {
 		// placed by hand: it hovers while held and only grows its floor mount once let go
 		if held {
 			lift = 0.12 + 0.015*math.Sin(fxTime()*5)
-			ringSoft(fl(p, 0.01), 0.18+0.03*math.Sin(fxTime()*9), 0.03, cEnergy.alpha(0.6), 32)
-			beam(fl(p, lift+0.03), fl(p, 0.005), cEnergy, 0.02, 2)
-			addPoint(fl(p, lift), cEnergyHot, 2.5, 2.5)
+			ringSoft(fl(p, 0.01), 0.18+0.03*math.Sin(fxTime()*9), 0.03, glowCol.alpha(0.6), 32)
+			beam(fl(p, lift+0.03), fl(p, 0.005), glowCol, 0.02, 2)
+			addPoint(fl(p, lift), glowHot, 2.5, 2.5)
 		} else if rg := regrowAt(p); rg != nil {
 			ra := math.Max(0, fxTime()-rg.t0)
 			lift = math.Max(0, 0.12*(1-ra/0.35))
@@ -433,10 +431,10 @@ func (e *editor) drawDeploy(d *deploy, p pt2, H float64, prev, next pt2) bool {
 	if age < 0.9 {
 		s := (age - 0.45) / 0.45
 		ringSoft(c.add(up.mul(0.01)), 0.1+1.0*s, 0.06, col.alpha(float32(0.9*(1-s))), 48)
-		addPoint(c.add(up.mul(0.2)), cEnergyHot, 8*(1-s), 3.5)
-		ringSoft(c.add(up.mul(0.01)), 0.05+0.6*s, 0.03, cEnergyHot.alpha(float32(0.7*(1-s))), 36)
+		addPoint(c.add(up.mul(0.2)), glowHot, 8*(1-s), 3.5)
+		ringSoft(c.add(up.mul(0.01)), 0.05+0.6*s, 0.03, glowHot.alpha(float32(0.7*(1-s))), 36)
 		floorGlow(p, 0.6*(1-s)+0.1, col.alpha(float32(0.5*(1-s))))
-		sprite(c.add(up.mul(0.15)), 0.3*(1-s)+0.05, cEnergyHot.alpha(float32(0.6*(1-s))))
+		sprite(c.add(up.mul(0.15)), 0.3*(1-s)+0.05, glowHot.alpha(float32(0.6*(1-s))))
 		if s < 0.15 {
 			sprite(c.add(up.mul(0.1)), 0.5, rgba{1, 1, 1, float32(0.7 * (1 - s/0.15))})
 		}
@@ -454,8 +452,8 @@ func (e *editor) drawDeploy(d *deploy, p pt2, H float64, prev, next pt2) bool {
 	genShaftGeom(p, Hs, prev, next, lift)
 	if pop < 1 {
 		// the housing snaps up out of the base in a burst of light and steam
-		sprite(c.add(up.mul(0.3)), 0.5*(1-pop)+0.1, cEnergyHot.alpha(float32(0.8*(1-pop))))
-		addPoint(c.add(up.mul(0.3)), cEnergyHot, 6*(1-pop), 3)
+		sprite(c.add(up.mul(0.3)), 0.5*(1-pop)+0.1, glowHot.alpha(float32(0.8*(1-pop))))
+		addPoint(c.add(up.mul(0.3)), glowHot, 6*(1-pop), 3)
 		if rand.Float64() < 0.3 {
 			spawnSteam(c.add(up.mul(0.05)), v3(rand.NormFloat64(), 0.2, rand.NormFloat64()).norm(), 2)
 		}

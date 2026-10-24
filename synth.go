@@ -127,6 +127,10 @@ func (v *voice) init() {
 		// heavy steel latch body: low, inharmonic, short
 		v.dur = 0.95
 		v.bank(310+50*v.rnd(), plate[:6], []float64{0.22, 0.17, 0.12, 0.09, 0.07, 0.05}, 0.8)
+	case sndBeep:
+		v.dur = 0.2
+	case sndTone0, sndTone1, sndTone2, sndTone3:
+		v.dur = 0.5
 	case sndAlarm:
 		v.dur = 1.9
 	case sndBoom:
@@ -376,6 +380,25 @@ func (v *voice) sample() float64 {
 			out += bp * 0.11 * math.Min(1, b/0.03) * math.Exp(-b/0.22)
 		}
 		return out * 0.9
+	case sndBeep:
+		f := 1760.0
+		if t > 0.085 {
+			f = 1320
+		}
+		x := math.Sin(2 * math.Pi * f * t)
+		x = math.Max(-0.6, math.Min(0.6, x*1.6)) // a cheap little speaker
+		k := env(math.Mod(t, 0.085), 0.002, 0.03)
+		if t > 0.17 {
+			k = 0
+		}
+		return x * k * 0.55
+	case sndTone0, sndTone1, sndTone2, sndTone3:
+		// Simon's tones (the old game's notes: E4, A4, E3, C#4), a soft square through a
+		// small speaker
+		f := []float64{329.63, 440, 164.81, 277.18}[v.kind-sndTone0]
+		x := math.Sin(2*math.Pi*f*t) + 0.3*math.Sin(6*math.Pi*f*t) + 0.12*math.Sin(10*math.Pi*f*t)
+		k := math.Min(1, t/0.006) * math.Min(1, (0.5-t)/0.08)
+		return x * math.Max(0, k) * 0.32
 	case sndAlarm:
 		// industrial two-tone klaxon, harsh and slightly detuned, through a cheap horn
 		f := 640.0
@@ -754,11 +777,15 @@ func (f *fdn) step(in float64) (float64, float64) {
 // ---- engine ----
 
 type engine struct {
-	mu                                   sync.Mutex
-	pending                              []voice
-	voices                               []voice
-	humT, humP, buzzT, buzzP, crackT     float64
-	weldT, weldP, machT, machP           float64
+	mu                               sync.Mutex
+	pending                          []voice
+	voices                           []voice
+	humT, humP, buzzT, buzzP, crackT float64
+	weldT, weldP, machT, machP       float64
+	// the EMP cart's gas engine: how loud, how fast (rpm), where; smoothed; its firing
+	motorT, rpmT, motorPT                float64
+	motor, rpm, motorP, firePh, fireAmp  float64
+	fireJit                              float64
 	hum, buzz, crack, weld, mach, hp, bp float64
 	wp, mp                               float64
 	t                                    float64
@@ -773,6 +800,83 @@ type engine struct {
 	// pointer-on-wall interference: sample-and-hold static, stutter gate, hopping carrier
 	ifHold, ifCnt, ifN, ifGate, ifGT float64
 	ifHop, ifPh, ifHT, ifHP          float64
+	// recorded clips (the radio voice), each from one of a few moving sources
+	clips  []clipPlay
+	cpend  []clipPlay
+	csrc   [4]clipSrc // what the game wants each source to sound like
+	ccur   [4]clipSrc // smoothed toward csrc
+	cclear [4]bool
+	cend   [4]float64 // when the last clip queued on each source ends
+	tNow   float64    // engine time at the start of the current block (for the game thread)
+}
+
+// ---- recorded clips ----
+
+const clipRate = 16000.0 // the voice clips are 16 kHz mono
+
+type clipPlay struct {
+	data []int16
+	pos  float64 // in clip samples
+	at   float64 // engine time it starts
+	src  int
+}
+
+type clipSrc struct{ amp, pan, send float64 }
+
+type clipItem struct {
+	data []int16
+	gap  float64 // silence after it
+}
+
+// queueClips: play these one after another from source src (interrupt cuts whatever that
+// source was saying).
+func (e *engine) queueClips(src int, items []clipItem, interrupt bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if interrupt {
+		e.cclear[src] = true
+		keep := e.cpend[:0]
+		for _, c := range e.cpend {
+			if c.src != src {
+				keep = append(keep, c)
+			}
+		}
+		e.cpend = keep
+		e.cend[src] = 0
+	}
+	at := math.Max(e.tNow+0.06, e.cend[src])
+	for _, it := range items {
+		if len(it.data) == 0 {
+			continue
+		}
+		e.cpend = append(e.cpend, clipPlay{data: it.data, at: at, src: src})
+		at += float64(len(it.data))/clipRate + it.gap
+	}
+	e.cend[src] = at
+}
+
+// stopClips: silence every recorded clip, playing or queued (leaving the game).
+func (e *engine) stopClips() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.cpend = e.cpend[:0]
+	for i := range e.cclear {
+		e.cclear[i], e.cend[i] = true, 0
+	}
+}
+
+// clipSource: where a source is right now, as the listener hears it.
+func (e *engine) clipSource(src int, amp, pan, send float64) {
+	e.mu.Lock()
+	e.csrc[src] = clipSrc{amp, math.Max(-1, math.Min(1, pan)), send}
+	e.mu.Unlock()
+}
+
+// clipBusyFor: how many seconds of speech are still queued on a source.
+func (e *engine) clipBusyFor(src int) float64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return math.Max(0, e.cend[src]-e.tNow)
 }
 
 var eng = &engine{rev: newFDN(), rng: 0x9E3779B9, nextAmb: 4}
@@ -858,8 +962,24 @@ func (e *engine) render(out []float64) {
 	e.mu.Lock()
 	e.voices = append(e.voices, e.pending...)
 	e.pending = e.pending[:0]
+	for si := range e.cclear {
+		if e.cclear[si] {
+			keep := e.clips[:0]
+			for _, c := range e.clips {
+				if c.src != si {
+					keep = append(keep, c)
+				}
+			}
+			e.clips = keep
+			e.cclear[si] = false
+		}
+	}
+	e.clips = append(e.clips, e.cpend...)
+	e.cpend = e.cpend[:0]
+	csrc := e.csrc
 	ht, hpT, bt, bpT, ct := e.humT, e.humP, e.buzzT, e.buzzP, e.crackT
 	wt, wpT, mt, mpT := e.weldT, e.weldP, e.machT, e.machP
+	mot, rpmT, motP := e.motorT, e.rpmT, e.motorPT
 	e.mu.Unlock()
 	e.drone[0].set(55, 2.5, 0.02)
 	e.drone[1].set(82.4, 2.2, 0.015)
@@ -958,6 +1078,33 @@ func (e *engine) render(out []float64) {
 			pan(w*e.weld, e.wp, 1)
 			send += w * e.weld * 0.3
 		}
+		e.motor += (mot - e.motor) * 0.0015
+		e.rpm += (rpmT - e.rpm) * 0.00025
+		e.motorP += (motP - e.motorP) * 0.002
+		if e.motor > 1e-4 {
+			// a four-cylinder gas engine: a fat exhaust thump on every firing (two per turn of
+			// the crank), each a little different, through a throaty resonance that opens up
+			// as it revs, plus valve-train chatter
+			fire := math.Max(10, e.rpm/60*2)
+			e.firePh += fire * (1 + e.fireJit) / fs
+			if e.firePh >= 1 {
+				e.firePh -= 1
+				e.fireAmp = 0.65 + 0.35*math.Abs(e.rnd())
+				e.fireJit = 0.06 * e.rnd()
+			}
+			ph := e.firePh
+			pop := math.Exp(-ph*6) * e.fireAmp
+			_, nb, _ := e.f[7].step(n, 220+fire*5, 0.7)
+			ex := pop*(1.6-0.9*ph) + nb*pop*0.9
+			lp, _, _ := e.f[8].step(ex, 90+fire*2.6, 0.92)
+			_, rb, _ := e.f[9].step(ex, 2*fire+60, 0.25)
+			e.ph[3] += e.rpm / 60 * 4 / fs
+			tick := math.Pow(0.5+0.5*math.Sin(2*math.Pi*e.ph[3]), 12)
+			_, _, vh := e.f[10].step(n, 3500, 0.6)
+			m := lp*0.9 + rb*0.35 + vh*tick*0.05*math.Min(1, e.rpm/2500)
+			pan(m*e.motor, e.motorP, 1)
+			send += m * e.motor * 0.15
+		}
 		if e.mach > 1e-4 {
 			e.ph[1] += (18 + 4*math.Sin(t)) / fs
 			pulse := math.Pow(0.5+0.5*math.Sin(2*math.Pi*e.ph[1]), 6)
@@ -988,6 +1135,33 @@ func (e *engine) render(out []float64) {
 			live = append(live, v)
 		}
 		e.voices = live
+		if len(e.clips) > 0 {
+			for si := range e.ccur {
+				c, w := &e.ccur[si], csrc[si]
+				c.amp += (w.amp - c.amp) * 0.002
+				c.pan += (w.pan - c.pan) * 0.002
+				c.send += (w.send - c.send) * 0.002
+			}
+			cl := e.clips[:0]
+			for _, c := range e.clips {
+				if t < c.at {
+					cl = append(cl, c)
+					continue
+				}
+				k := int(c.pos)
+				if k+1 >= len(c.data) {
+					continue
+				}
+				f := c.pos - float64(k)
+				x := (float64(c.data[k])*(1-f) + float64(c.data[k+1])*f) / 32768
+				src := e.ccur[c.src]
+				pan(x*src.amp, src.pan, 1)
+				send += x * src.amp * src.send
+				c.pos += clipRate / fs
+				cl = append(cl, c)
+			}
+			e.clips = cl
+		}
 		rl2, rr2 := e.rev.step(send * 0.5)
 		L += rl2 * 0.32
 		Rr += rr2 * 0.32
@@ -997,6 +1171,9 @@ func (e *engine) render(out []float64) {
 		out[2*i+1] = math.Tanh((Rr - e.dcR) * 1.1)
 		e.t += dt
 	}
+	e.mu.Lock()
+	e.tNow = e.t
+	e.mu.Unlock()
 }
 
 // one-pole distance lowpass into ph[5]
@@ -1007,6 +1184,19 @@ func (v *voice) a2lp(s float64) {
 func (e *engine) set(humVol, humPan, buzz, buzzPan, crackle float64) {
 	e.mu.Lock()
 	e.humT, e.humP, e.buzzT, e.buzzP, e.crackT = humVol, humPan, buzz, buzzPan, crackle
+	e.mu.Unlock()
+}
+
+// motorSet: the cart's gas engine - volume 0 is off; rpm, and pan.
+func (e *engine) motorSet(vol, rpm, pan float64) {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	e.motorT, e.rpmT, e.motorPT = vol, rpm, pan
+	if vol > 0 && e.rpm < 1 {
+		e.rpm = rpm
+	}
 	e.mu.Unlock()
 }
 

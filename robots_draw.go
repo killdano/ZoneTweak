@@ -1,5 +1,3 @@
-//go:build windows
-
 package main
 
 import (
@@ -13,6 +11,9 @@ var (
 	cChrome = rgba{0.72, 0.74, 0.78, 1}
 	cHose   = rgba{0.05, 0.05, 0.06, 1}
 )
+
+// robotCrowdK: >1 when there are many robots, to draw them all a little simpler.
+var robotCrowdK = 1.0
 
 func (e *editor) separateRobots() {
 	for i := 0; i < len(robots); i++ {
@@ -195,6 +196,9 @@ func (e *editor) robotRoles(r *robot) {
 }
 
 func rivetRow(a, b, n vec3, count int, r float64) {
+	if lodNoTrim {
+		return
+	}
 	for k := 0; k < count; k++ {
 		p := a.add(b.sub(a).mul((float64(k) + 0.5) / float64(count)))
 		cyl(&bEnv, p, p.add(n.mul(r*0.6)), r, r*0.7, 5, cMetal, true)
@@ -208,7 +212,7 @@ func circuitPanel(c, ax, ay, n vec3, hw, hh float64, wear float32) {
 	p := func(x, y float64) vec3 { return c.add(ax.mul(x)).add(ay.mul(y)).add(n.mul(0.002)) }
 	bEnv.quadF(p(-hw, -hh), p(hw, -hh), p(hw, hh), p(-hw, hh), n, rgba{0.1, 0.4, 0.15, 1})
 	curMat = mSteel
-	for k := 0; k < 3; k++ {
+	for k := 0; k < 3 && !lodNoTrim; k++ {
 		x := -hw*0.6 + float64(k)*hw*0.6
 		cc := p(x, hh*0.5)
 		bevelBox(&bEnv, cc.add(n.mul(0.006)), ax, ay, n, hw*0.18, hh*0.15, 0.005, 0.002, rgba{0.05, 0.05, 0.06, 1})
@@ -230,8 +234,11 @@ func (e *editor) jointSparks(r *robot, p, n vec3) {
 func (e *editor) drawRobot(r *robot) {
 	e.robotLighting(r)
 	e.robotRoles(r)
-	// level of detail by distance: full curve detail up close, fewer facets further away
-	switch d := dist2(r.pos, pt2{camPos.x, camPos.z}); {
+	// level of detail by distance: full curve detail up close, fewer facets further away,
+	// and beyond arm's reach no rivets or chips; further still, plain boxes. A crowd pushes
+	// the steps closer (dozens of robots at once is a lot of geometry to build every frame).
+	d := dist2(r.pos, pt2{camPos.x, camPos.z}) * robotCrowdK
+	switch {
 	case d < 1.8:
 		segMul = 1.6
 	case d < 3.5:
@@ -239,18 +246,24 @@ func (e *editor) drawRobot(r *robot) {
 	case d < 6:
 		segMul = 0.8
 	default:
-		segMul = 0.6
+		segMul = 0.55
 	}
+	lodNoTrim = d > 2.6
+	lodPlainBox = d > 4.5
 	if potatoMode {
 		segMul *= 0.6
 	}
 	saveC := primCounter
 	primCounter = float64(r.vid) * 977
-	defer func() { roles, segMul, primCounter = nil, 1, saveC }()
+	defer func() { roles, segMul, primCounter, lodNoTrim, lodPlainBox = nil, 1, saveC, false, false }()
 	f := v3(math.Cos(r.yaw), 0, math.Sin(r.yaw))
 	s := v3(-f.z, 0, f.x)
 	up := v3(0, 1, 0)
-	base := fl(r.pos, 0)
+	base := fl(r.pos, -r.sink)
+	if r.tilt != 0 {
+		ct, st := math.Cos(r.tilt), math.Sin(r.tilt)
+		up, f = up.mul(ct).add(f.mul(st)), f.mul(ct).sub(v3(0, 1, 0).mul(st))
+	}
 	F := xf{base, s, up, f}
 	defer withTex(F)() // textures ride with the robot instead of sliding over it
 	hf := f.mul(math.Cos(r.headYaw)).add(s.mul(math.Sin(r.headYaw)))
@@ -262,6 +275,9 @@ func (e *editor) drawRobot(r *robot) {
 	}
 	t := fxTime()
 	wy := 0.55 + 1.0*(0.5+0.5*math.Sin(t*0.35+r.seed))
+	if r.workSet {
+		working, gp, wy = true, r.workAt, r.workY
+	}
 	armBlend = 1
 	if r.state == rbFire && (r.firePh == fpRepair || r.firePh == fpFinish) && r.rpK > 0 {
 		// the repair tools swing out to the box (and back) instead of snapping there
@@ -687,7 +703,7 @@ func (e *editor) drawWarden(r *robot, F xf, hf, hs vec3, working bool, gp pt2, w
 				}
 			}
 			if cutting || r.sprayOn {
-			} else if working && armBlend >= 0.999 {
+			} else if working && armBlend >= 0.999 && !r.noWeld {
 				e.weldFX(r, tip, gp)
 			} else if torch > 0.004 {
 				sprite(tip, 0.015, cWeld.alpha(0.7))
@@ -965,7 +981,7 @@ func (e *editor) drawTread(r *robot, F xf, hf, hs vec3, working bool, gp pt2, wy
 		}
 	}
 	if cutting || r.sprayOn {
-	} else if working && armBlend >= 0.999 {
+	} else if working && armBlend >= 0.999 && !r.noWeld {
 		e.weldFX(r, nz, gp)
 	} else if torch > 0.004 {
 		sprite(nz, 0.015, cWeld.alpha(0.7))

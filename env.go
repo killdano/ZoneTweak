@@ -1,5 +1,3 @@
-//go:build windows
-
 package main
 
 import (
@@ -42,7 +40,24 @@ var (
 	cIron      = rgba{0.20, 0.20, 0.21, 1}
 )
 
-const envH = 5.2
+var envH = 5.2
+
+// envDoorsOn: the game places a door bay on each wall at envDoorAt (the coordinate along
+// that wall in the room frame; NaN for none) instead of ZoneTweak's two fixed doors
+var (
+	envDoorsOn  bool
+	envDoorAt   = [4]float64{math.NaN(), math.NaN(), math.NaN(), math.NaN()}
+	envLampC    pt2
+	envLampK    = 1.0              // the game dims the hall lamps (lights out)
+	envLampTint = rgba{1, 1, 1, 1} // and tints them (emergency power)
+)
+
+// staticGlow: how bright the hall's own lamps and light strips glow (lights out dims and
+// reddens them; the renderer applies it to the static geometry's emissive parts).
+func staticGlow() vec3 {
+	k := 0.08 + 0.92*math.Pow(math.Max(0, envLampK), 1.5)
+	return vec3{float64(envLampTint.r) * k, float64(envLampTint.g) * k, float64(envLampTint.b) * k}
+}
 
 func (e *editor) buildEnvironment() {
 	if !envHave || (!e.manipulating() && !slideActive()) {
@@ -90,9 +105,7 @@ func (e *editor) buildEnvironment() {
 		envKey = key
 		e.buildStatic(g, x0-m, x1+m, z0-m, z1+m)
 		staticVer++
-		if R != nil {
-			R.staticVer = staticVer
-		}
+		staticChanged(staticVer)
 	}
 	world.doors = envDoors
 	e.animateEnv()
@@ -319,7 +332,11 @@ func (e *editor) buildStatic(g rigid2, x0, x1, z0, z1 float64) {
 		bays, gidx := envBays(lo, hi)
 		doorBay := -1
 		for bi, b := range bays {
-			if (si == 0 || si == 2) && b[0] <= 0 && b[1] > 0 {
+			if envDoorsOn {
+				if !math.IsNaN(envDoorAt[si]) && b[0] <= envDoorAt[si] && b[1] > envDoorAt[si] {
+					doorBay = bi
+				}
+			} else if (si == 0 || si == 2) && b[0] <= 0 && b[1] > 0 {
 				doorBay = bi
 			}
 		}
@@ -398,7 +415,7 @@ func (e *editor) buildStatic(g rigid2, x0, x1, z0, z1 float64) {
 		}
 	}
 	// two shadowed ceiling lamps (with a fan under one)
-	cx, cz := 0.0, 0.0 // the room frame's origin, so the lamps stay put when it resizes
+	cx, cz := envLampC[0], envLampC[1] // the room frame's origin unless the game moves them
 	for i, off := range []float64{-1.3, 1.3} {
 		p := fl(W(cx+off, cz), H-0.75)
 		envLamps = append(envLamps, p)
@@ -643,20 +660,24 @@ func (e *editor) animateEnv() {
 		near := l.a.sub(cam).length() < 12
 		switch l.kind {
 		case 0:
-			pulse := (0.85 + 0.15*math.Sin(t*0.8+l.phase)) * fl
-			ribbon(l.a.add(l.n.mul(0.01)), l.b.add(l.n.mul(0.01)), 0.07, l.col.alpha(float32(0.12*pulse)))
-			if near {
-				addLine(l.a.add(l.n.mul(0.05)), l.b.add(l.n.mul(0.05)), l.col, 1.2*pulse, 5)
+			pulse := (0.85 + 0.15*math.Sin(t*0.8+l.phase)) * fl * envLampK
+			col := l.col
+			col.r, col.g, col.b = col.r*envLampTint.r, col.g*envLampTint.g, col.b*envLampTint.b
+			ribbon(l.a.add(l.n.mul(0.01)), l.b.add(l.n.mul(0.01)), 0.07, col.alpha(float32(0.12*pulse)))
+			if near && pulse > 0.02 {
+				addLine(l.a.add(l.n.mul(0.05)), l.b.add(l.n.mul(0.05)), col, 1.2*pulse, 5)
 			}
 			if fl < 0.5 && rand.Float64() < 0.0012 {
 				spawnSparks(l.a.add(d.mul(rand.Float64())), l.n, 6, 0.3)
 				e.sfx(sndSpark, l.a, 0.25)
 			}
 		case 1:
-			pulse := (0.9 + 0.1*math.Sin(t*1.3+l.phase*2)) * fl
-			sprite(l.a, 0.22, l.col.alpha(float32(0.12*pulse)))
-			if near {
-				addPoint(l.a.add(l.n.mul(0.08)), l.col, 1.4*pulse, 4)
+			pulse := (0.9 + 0.1*math.Sin(t*1.3+l.phase*2)) * fl * envLampK
+			col := l.col
+			col.r, col.g, col.b = col.r*envLampTint.r, col.g*envLampTint.g, col.b*envLampTint.b
+			sprite(l.a, 0.22, col.alpha(float32(0.12*pulse)))
+			if near && pulse > 0.02 {
+				addPoint(l.a.add(l.n.mul(0.08)), col, 1.4*pulse, 4)
 			}
 		case 3:
 			c := l.col
@@ -738,12 +759,13 @@ func (e *editor) animateEnv() {
 	}
 	spots = spots[:0]
 	for i, p := range envLamps {
-		k := 70.0
+		k := 70.0 * envLampK
 		if i == 1 {
 			k *= 0.4 + 0.6*flickerOf(envEmitter{phase: 9.3, broken: 0.35}, t)
 		}
-		spots = append(spots, makeSpot(p.add(vec3{0, -0.2, 0}), vec3{0, -1, 0}, rgba{1, 0.9, 0.75, 1}, k, 60, 28, 10))
-		sprite(p.add(vec3{0, -0.1, 0}), 0.4, rgba{1, 0.9, 0.75, 0.2})
+		lc := rgba{1 * envLampTint.r, 0.9 * envLampTint.g, 0.75 * envLampTint.b, 1}
+		spots = append(spots, makeSpot(p.add(vec3{0, -0.2, 0}), vec3{0, -1, 0}, lc, k, 60, 28, 10))
+		sprite(p.add(vec3{0, -0.1, 0}), 0.4, lc.alpha(float32(0.2*math.Min(1, envLampK))))
 	}
 }
 

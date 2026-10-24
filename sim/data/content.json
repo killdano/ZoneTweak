@@ -1,0 +1,27 @@
+{
+  "repairTasks": [
+    {"id": "patch",   "name": "RUN A PATCH CABLE FROM THE BASE TO THE TOP", "secs": 4},
+    {"id": "breaker", "name": "THROW THE BREAKER DOWN AND BACK UP",        "secs": 2},
+    {"id": "crank",   "name": "CRANK THE CAPACITOR BACK UP",               "secs": 4},
+    {"id": "fuse",    "name": "PULL THE BURNT FUSE, SEAT A NEW ONE",       "secs": 3},
+    {"id": "valve",   "name": "SPIN THE COOLANT VALVE OPEN",               "secs": 3},
+    {"id": "screws",  "name": "UNSCREW THE SCORCHED COVER (SCREWDRIVER)",  "secs": 6},
+    {"id": "bolts",   "name": "UNBOLT THE SCORCHED COVER (WRENCH)",        "secs": 6}
+  ],
+  "repairSteps": [2, 3],
+  "empModules": [
+    {"id": "screws",  "name": "UNSCREW THE ACCESS PLATE",          "secs": 16},
+    {"id": "wires",   "name": "WIRE THE CAPACITOR BANK",           "secs": 20},
+    {"id": "game",    "name": "THE DEVICE WANTS A GAME",           "secs": 18},
+    {"id": "dials",   "name": "SET THE THREE DIALS",               "secs": 18},
+    {"id": "crank",   "name": "CHARGE THE COIL. IT LEAKS",         "secs": 22},
+    {"id": "serial",  "name": "READ THE SERIAL IN THE DARK SLOT",  "secs": 20},
+    {"id": "game",    "name": "THE DEVICE WANTS ANOTHER GAME",     "secs": 18},
+    {"id": "ripcord", "name": "START THE ENGINE, PUSH THE BUTTON",  "secs": 18}
+  ],
+  "games": ["simon", "needle", "freq", "safe", "plug", "valves", "look"],
+  "drones": [
+    {"id": "leech", "from": 0, "weight": 1}
+  ],
+  "doors": ["NORTH", "EAST", "SOUTH", "WEST"]
+}

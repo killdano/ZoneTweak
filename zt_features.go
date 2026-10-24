@@ -9,13 +9,6 @@ import (
 	"time"
 )
 
-var (
-	cWarn   = rgba{1.00, 0.55, 0.15, 1}
-	cDanger = rgba{1.00, 0.22, 0.20, 1}
-	cArea   = rgba{1.00, 0.30, 0.85, 1}
-	cLaser  = rgba{0.75, 0.95, 1.00, 1}
-)
-
 func (e *editor) warnDist() (float64, bool) {
 	if v, ok := e.zone.warnDistance(); ok {
 		return v, true
@@ -42,42 +35,6 @@ func (e *editor) proximityLevel() float64 {
 		}
 	}
 	return lvl
-}
-
-func (h *hand) rawLaser() (pt2, bool) {
-	if !h.aimValid {
-		return pt2{}, false
-	}
-	o := h.aim.pos()
-	dir := h.aim.axis(2).mul(-1)
-	if dir.y > -0.03 {
-		return pt2{}, false
-	}
-	t := -o.y / dir.y
-	if t > 15 || t < 0 {
-		return pt2{}, false
-	}
-	return pt2{o.x + dir.x*t, o.z + dir.z*t}, true
-}
-
-func (h *hand) updateLaser(dt float64) {
-	if h.lf == nil {
-		h.lf = newPointFilter()
-	}
-	raw, ok := h.rawLaser()
-	if !ok {
-		h.lf.reset()
-		h.lok = false
-		return
-	}
-	h.lc, h.lok = h.lf.step(raw, dt), true
-}
-
-func (h *hand) pointer(laser bool) (pt2, bool) {
-	if !laser {
-		return h.cursor(), true
-	}
-	return h.lc, h.lok
 }
 
 func (e *editor) rayPanel(h *hand) (vec3, bool) {

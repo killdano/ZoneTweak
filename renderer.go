@@ -674,7 +674,9 @@ func (r *renderer) drawMirror(ex *eyeExtras, cam vec3, nl int, vpm mat4, cull *m
 	if nl > 12 {
 		r.lit.i1("u_nL", 12)
 	}
+	r.lit.f3("u_emisTint", staticGlow())
 	r.drawStatic(r.lit, cull)
+	r.lit.f3("u_emisTint", vec3{1, 1, 1})
 	drawGenPartsIn(cull)
 	drawB(&bEnv, glTriangles)
 	r.drawGlowPass(vpm, false)
@@ -814,7 +816,9 @@ func (r *renderer) renderEye(eye int, t *eyeTarget, proj mat4, view hmdMatrix34,
 	if !perfOpt {
 		call(glDepthMaskP, 1) // no prepass: these lay down their own depth
 	}
+	r.lit.f3("u_emisTint", staticGlow())
 	r.drawStatic(r.lit, cv)
+	r.lit.f3("u_emisTint", vec3{1, 1, 1})
 	drawGenPartsIn(cv)
 	drawB(&bEnv, glTriangles)
 	call(glDepthMaskP, 1)
@@ -971,4 +975,11 @@ func loadQuality(dir string) int {
 func saveQuality(dir string, i int) {
 	qualityIdx = i
 	saveGfx(dir)
+}
+
+// staticChanged: the room geometry was rebuilt; the renderer re-uploads it next frame
+func staticChanged(v int) {
+	if R != nil {
+		R.staticVer = v
+	}
 }

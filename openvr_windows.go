@@ -30,6 +30,7 @@ const (
 	// IVRChaperoneSetup_006 function table
 	ovrSetupRevert = 1
 	ovrSetupLive   = 5
+	ovrSetupStand  = 7 // GetWorkingStandingZeroPoseToRawTrackingPose
 	ovrSetupReload = 13
 
 	// IVRSettings_003 function table
@@ -46,6 +47,24 @@ const (
 )
 
 var errNoSteamVR = errors.New("SteamVR isn't running")
+
+// steamStanding: where SteamVR's standing (stage) origin sits in raw tracking space, from the
+// last live-bounds read (the bounds come in raw space).
+var (
+	steamStanding   [3][4]float64
+	steamStandingOK bool
+)
+
+// rawToStanding: SteamVR raw tracking points into standing (stage) coordinates.
+func rawToStanding(P []pt2) []pt2 {
+	m := steamStanding
+	out := make([]pt2, len(P))
+	for i, p := range P {
+		dx, dz := p[0]-m[0][3], p[1]-m[2][3]
+		out[i] = pt2{m[0][0]*dx + m[2][0]*dz, m[0][2]*dx + m[2][2]*dz}
+	}
+	return out
+}
 
 type openVR struct {
 	dll      *syscall.LazyDLL
@@ -134,7 +153,11 @@ func steamvrMain(args []string) (code int, ok bool) {
 				pts = append(pts, [2]float64{float64(c[0][0]), float64(c[0][2])})
 			}
 		}
-		b, _ := json.Marshal(pts)
+		// and where the standing (stage) origin is in raw tracking space, which the bounds are in
+		call(fnAt(o.setup, ovrSetupRevert))
+		var m [3][4]float32
+		ok := call(fnAt(o.setup, ovrSetupStand), uintptr(unsafe.Pointer(&m[0][0])))
+		b, _ := json.Marshal(map[string]any{"pts": pts, "standing": m, "ok": ok&0xff != 0})
 		os.Stdout.Write(b)
 		return exitOK, true
 	}
@@ -218,12 +241,17 @@ func steamvrLive() ([]pt2, error) {
 	if err != nil {
 		return nil, err
 	}
-	var raw [][2]float64
-	if err := json.Unmarshal(b, &raw); err != nil {
+	var v struct {
+		Pts      [][2]float64 `json:"pts"`
+		Standing [3][4]float64
+		OK       bool
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
 		return nil, err
 	}
-	out := make([]pt2, len(raw))
-	for i, p := range raw {
+	steamStanding, steamStandingOK = v.Standing, v.OK
+	out := make([]pt2, len(v.Pts))
+	for i, p := range v.Pts {
 		out[i] = pt2{p[0], p[1]}
 	}
 	return out, nil

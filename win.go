@@ -26,6 +26,7 @@ var (
 	pPostQuitMessage   = user32.NewProc("PostQuitMessage")
 	pGetClientRect     = user32.NewProc("GetClientRect")
 	pSetWindowTextW    = user32.NewProc("SetWindowTextW")
+	pSystemParamsInfoW = user32.NewProc("SystemParametersInfoW")
 	pChoosePixelFormat = gdi32.NewProc("ChoosePixelFormat")
 	pSetPixelFormat    = gdi32.NewProc("SetPixelFormat")
 	pSwapBuffers       = gdi32.NewProc("SwapBuffers")
@@ -33,6 +34,12 @@ var (
 	pwglMakeCurrent    = opengl32.NewProc("wglMakeCurrent")
 	pwglGetProcAddress = opengl32.NewProc("wglGetProcAddress")
 	pGetModuleHandleW  = kernel32.NewProc("GetModuleHandleW")
+	pGetWindowLongPtrW = user32.NewProc("GetWindowLongPtrW")
+	pSetWindowLongPtrW = user32.NewProc("SetWindowLongPtrW")
+	pGetWindowRect     = user32.NewProc("GetWindowRect")
+	pSetWindowPos      = user32.NewProc("SetWindowPos")
+	pMonitorFromWindow = user32.NewProc("MonitorFromWindow")
+	pGetMonitorInfoW   = user32.NewProc("GetMonitorInfoW")
 )
 
 type wndClassEx struct {
@@ -102,8 +109,56 @@ func info(msg string) {
 	pMessageBoxW.Call(0, uintptr(unsafe.Pointer(wstr(msg))), uintptr(unsafe.Pointer(wstr("ZoneTweak"))), 0x40|0x40000)
 }
 
+// Alt+Enter: borderless fullscreen on the window's monitor, and back.
+var (
+	winFull    bool
+	savedStyle uintptr
+	savedRect  rect
+)
+
+type monitorInfo struct {
+	cbSize    uint32
+	rcMonitor rect
+	rcWork    rect
+	dwFlags   uint32
+}
+
+func toggleFullscreen() {
+	const gwlStyle = ^uintptr(15)        // GWL_STYLE (-16)
+	const swp = 0x0020 | 0x0200 | 0x0040 // SWP_FRAMECHANGED | SWP_NOOWNERZORDER | SWP_SHOWWINDOW
+	if !winFull {
+		savedStyle, _, _ = pGetWindowLongPtrW.Call(hwnd, gwlStyle)
+		pGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&savedRect)))
+		mon, _, _ := pMonitorFromWindow.Call(hwnd, 2) // MONITOR_DEFAULTTONEAREST
+		mi := monitorInfo{cbSize: uint32(unsafe.Sizeof(monitorInfo{}))}
+		if ok, _, _ := pGetMonitorInfoW.Call(mon, uintptr(unsafe.Pointer(&mi))); ok == 0 {
+			return
+		}
+		style := savedStyle&^0x00CF0000 | 0x80000000 | 0x10000000 // no frame: WS_POPUP | WS_VISIBLE
+		pSetWindowLongPtrW.Call(hwnd, gwlStyle, style)
+		m := mi.rcMonitor
+		pSetWindowPos.Call(hwnd, 0, uintptr(uint32(m.l)), uintptr(uint32(m.t)), uintptr(uint32(m.r-m.l)), uintptr(uint32(m.b-m.t)), swp)
+	} else {
+		pSetWindowLongPtrW.Call(hwnd, gwlStyle, savedStyle)
+		r := savedRect
+		pSetWindowPos.Call(hwnd, 0, uintptr(uint32(r.l)), uintptr(uint32(r.t)), uintptr(uint32(r.r-r.l)), uintptr(uint32(r.b-r.t)), swp)
+	}
+	winFull = !winFull
+}
+
 func wndProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 	switch msg {
+	case 0x0104: // WM_SYSKEYDOWN: Alt+Enter toggles borderless fullscreen
+		if wp == 0x0D && lp&(1<<29) != 0 {
+			if lp&(1<<30) == 0 { // not a key repeat
+				toggleFullscreen()
+			}
+			return 0
+		}
+	case 0x0106: // WM_SYSCHAR: no beep for Alt+Enter
+		if wp == 0x0D {
+			return 0
+		}
 	case 0x0010:
 		windowQuit = true
 		return 0
@@ -118,7 +173,7 @@ func wndProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 func createWindow(title string, w, h int32) error {
 	hinst, _, _ := pGetModuleHandleW.Call(0)
 	cursor, _, _ := pLoadCursorW.Call(0, 32512)
-	cls := wstr("ZoneTweak")
+	cls := wstr("Contraband")
 	*gWndClass = wndClassEx{
 		cbSize:        uint32(unsafe.Sizeof(wndClassEx{})),
 		style:         0x0020,
@@ -130,8 +185,23 @@ func createWindow(title string, w, h int32) error {
 	if r, _, err := pRegisterClassExW.Call(uintptr(unsafe.Pointer(gWndClass))); r == 0 {
 		return err
 	}
+	// open on the primary monitor, centred in its work area (CW_USEDEFAULT would follow
+	// whichever monitor the launching Explorer window was on)
+	x, y := uintptr(0x80000000), uintptr(0x80000000)
+	var wa struct{ left, top, right, bottom int32 }
+	if ok, _, _ := pSystemParamsInfoW.Call(0x0030, 0, uintptr(unsafe.Pointer(&wa)), 0); ok != 0 && wa.right > wa.left {
+		cx := wa.left + (wa.right-wa.left-w)/2
+		cy := wa.top + (wa.bottom-wa.top-h)/2
+		if cx < wa.left {
+			cx = wa.left
+		}
+		if cy < wa.top {
+			cy = wa.top
+		}
+		x, y = uintptr(uint32(cx)), uintptr(uint32(cy))
+	}
 	r, _, err := pCreateWindowExW.Call(0, uintptr(unsafe.Pointer(cls)), uintptr(unsafe.Pointer(wstr(title))),
-		0x10CF0000, 0x80000000, 0x80000000, uintptr(w), uintptr(h), 0, 0, hinst, 0)
+		0x10CF0000, x, y, uintptr(w), uintptr(h), 0, 0, hinst, 0)
 	if r == 0 {
 		return err
 	}
@@ -184,4 +254,19 @@ func glProc(name string) uintptr {
 		return 0
 	}
 	return r
+}
+
+// keepAwake: tell Windows someone's using the PC (you are, in the headset) so it doesn't
+// blank the monitors, start the screen saver or go to sleep while the app runs. Called every
+// half minute: the execution state (ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
+// keeps the display and the PC on, and a mouse "move" of nothing resets the idle clock the
+// screen saver and the lock screen go by (the pointer doesn't move).
+var (
+	pSetThreadExecutionState = kernel32.NewProc("SetThreadExecutionState")
+	pMouseEvent              = user32.NewProc("mouse_event")
+)
+
+func keepAwake() {
+	pSetThreadExecutionState.Call(0x80000000 | 0x00000001 | 0x00000002)
+	pMouseEvent.Call(0x0001, 0, 0, 0, 0) // MOUSEEVENTF_MOVE by 0, 0
 }

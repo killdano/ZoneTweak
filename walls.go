@@ -1,5 +1,3 @@
-//go:build windows
-
 package main
 
 import (
@@ -337,7 +335,7 @@ func (e *editor) bladeExtDraw(i int, p, prev, next pt2, col rgba, ext float64) {
 			g := float32(math.Min(1, (ext-0.55)/0.4) * e.sideWallPower(i, side))
 			// energy welling out of the trench along its length
 			ribbon(o, tip, 0.018, col.alpha(0.3*g))
-			ribbon(o, tip, 0.006, cEnergyHot.alpha(0.75*g))
+			ribbon(o, tip, 0.006, glowHot.alpha(0.75*g))
 			// the same flickering hot points as the main blade, jetting up into the sheet
 			nPts := int(Ld / 0.045)
 			if potatoMode {
@@ -350,10 +348,10 @@ func (e *editor) bladeExtDraw(i int, p, prev, next pt2, col rgba, ext float64) {
 				fk := noise1(hs*31, t*0.8*(0.8+hs*0.96))
 				br := float32(0.25+0.75*fk*fk) * g
 				sz := 0.015 + 0.035*hs*hs
-				sprite(pp, sz*(0.8+0.4*fk), cEnergyHot.alpha(0.5*br))
+				sprite(pp, sz*(0.8+0.4*fk), glowHot.alpha(0.5*br))
 				jl := (0.02 + 0.1*fk*fk) * (0.6 + sz*12)
 				// jets run dead level, straight out into the sheet (like the main blade's)
-				ribbonC(pp, pp.add(dv.mul(jl)), sz*0.5, cEnergyHot.alpha(0.4*br), cEnergyHot.alpha(0))
+				ribbonC(pp, pp.add(dv.mul(jl)), sz*0.5, glowHot.alpha(0.4*br), glowHot.alpha(0))
 			}
 			sprite(tip, 0.03, col.alpha(0.6*g))
 		}
@@ -404,7 +402,7 @@ func (e *editor) bottomLenses(i int, p, prev, next pt2, ext float64, col rgba) {
 			lp := fc.add(dv.mul(0.04))
 			fl := float32(0.75 + 0.25*math.Sin(fxTime()*11+float64(i)*3+float64(side)))
 			sprite(lp, 0.075, col.alpha(0.55*fl*pw))
-			sprite(lp, 0.03, cEnergyHot.alpha(fl*pw))
+			sprite(lp, 0.03, glowHot.alpha(fl*pw))
 		}
 	}
 }
@@ -1365,7 +1363,13 @@ type railPt struct{ h, size, ph, f float64 }
 var railPts = map[pulseKey][]railPt{}
 
 // sideWallPower: power level of the wall leaving generator gi on side 0 (prev) or 1 (next)
+// sidePowerHook: the game decides which side of each generator has a live wall
+var sidePowerHook func(gi, side int) float64
+
 func (e *editor) sideWallPower(gi, side int) float64 {
+	if sidePowerHook != nil {
+		return sidePowerHook(gi, side)
+	}
 	n := len(e.pts)
 	if gi < 0 || n < 2 || e.drawing {
 		return 1
@@ -1433,6 +1437,14 @@ func updateMist() {
 
 // genGlow: lights, status beacon and blade glow of a generator; base is where its floor
 // mount is, planted false while it hovers (no mount, so no mist)
+// glowCol, glowHot: the energy colours a post glows with (green for your generators,
+// magenta for the maze's base stations); glowLite thins the effects for far-off posts.
+var (
+	glowCol  = cEnergy
+	glowHot  = cEnergyHot
+	glowLite bool
+)
+
 func (e *editor) genGlow(p pt2, H float64, prev, next pt2, hot bool, col rgba, fault, lift float64, base pt2, planted bool) {
 	t := fxTime()
 	if planted {
@@ -1441,7 +1453,7 @@ func (e *editor) genGlow(p pt2, H float64, prev, next pt2, hot bool, col rgba, f
 	c := fl(p, lift)
 	up := v3(0, 1, 0)
 	flick := float32(1)
-	statusCol := cEnergy
+	statusCol := glowCol
 	if fault > 0 {
 		statusCol = cDanger
 		if noise1(p[0]*13+p[1]*7, t*9) < fault*0.7 {
@@ -1494,11 +1506,11 @@ func (e *editor) genGlow(p pt2, H float64, prev, next pt2, hot bool, col rgba, f
 		fl := float32(0.75+0.25*math.Sin(t*11+dx*7)) * flick * (0.12 + 0.88*wp)
 		// the lens on the top emitter box glows where the top edge of the sheet leaves it
 		lp := c.add(dv.mul(headFace + 0.04)).add(up.mul(H - 0.26))
-		sprite(lp, 0.075, cEnergy.alpha(0.6*fl))
-		sprite(lp, 0.03, cEnergyHot.alpha(1.0*fl))
-		ribbon(lp, lp.add(dv.mul(0.09)), 0.006, cEnergyHot.alpha(0.6*fl))
+		sprite(lp, 0.075, glowCol.alpha(0.6*fl))
+		sprite(lp, 0.03, glowHot.alpha(1.0*fl))
+		ribbon(lp, lp.add(dv.mul(0.09)), 0.006, glowHot.alpha(0.6*fl))
 		ribbon(o.add(up.mul(0.44)), o.add(up.mul(H-0.26)), 0.03, ring.alpha(0.45*fl))
-		ribbon(o.add(up.mul(0.44)), o.add(up.mul(H-0.26)), 0.008, cEnergyHot.alpha(0.8*fl))
+		ribbon(o.add(up.mul(0.44)), o.add(up.mul(H-0.26)), 0.008, glowHot.alpha(0.8*fl))
 		// hot points held along the blade, like energy bleeding off it into the sheet: they
 		// hold their place, wander a little, flicker, and spit short jets sideways
 		key := pulseKey{p, nb}
@@ -1517,14 +1529,14 @@ func (e *editor) genGlow(p pt2, H float64, prev, next pt2, hot bool, col rgba, f
 		span := (H - 0.26) - 0.44
 		side := dv
 		for qi, q := range pts {
-			if potatoMode && qi%3 != 0 {
+			if potatoMode && qi%3 != 0 || glowLite && qi%4 != 0 {
 				continue
 			}
 			y := 0.44 + span*q.h + 0.03*math.Sin(t*0.8*q.f+q.ph) + 0.012*(noise1(q.ph, t*1.36)-0.5)
 			pp := o.add(up.mul(y))
 			fk := noise1(q.ph*3.1, t*0.8*(0.8+0.8*q.f)) // pulse rate x0.8
 			br := float32(0.25 + 0.75*fk*fk)
-			sprite(pp, q.size*(0.8+0.4*fk), cEnergyHot.alpha(0.55*br*fl))
+			sprite(pp, q.size*(0.8+0.4*fk), glowHot.alpha(0.55*br*fl))
 			if q.size > 0.045 {
 				sprite(pp, q.size*0.35, rgba{0.9, 1, 0.92, 0.7 * br * fl})
 			}
@@ -1533,7 +1545,7 @@ func (e *editor) genGlow(p pt2, H float64, prev, next pt2, hot bool, col rgba, f
 				continue
 			}
 			jl := (0.03 + 0.16*fk*fk) * (0.6 + q.size*12) * float64(wp)
-			ribbonC(pp, pp.add(side.mul(jl)), q.size*0.5, cEnergyHot.alpha(0.45*br*fl), cEnergyHot.alpha(0))
+			ribbonC(pp, pp.add(side.mul(jl)), q.size*0.5, glowHot.alpha(0.45*br*fl), glowHot.alpha(0))
 		}
 	}
 	for _, y := range []float64{0.12, 0.34, H - 0.22} {

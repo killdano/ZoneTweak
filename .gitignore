@@ -1,8 +1,13 @@
 # build output
+/Contraband.exe
 /ZoneTweak.exe
-/ZoneTweak.zip
+/*.zip
 /dist/
 *.log
-
-# personal Lighthouse / boundary captures used by local tests (never published)
+/preview/dump/
+/preview/out/
+/preview/prevbin
+# personal boundary / Lighthouse captures (local only)
 /testdata/
+*.test
+/contraband

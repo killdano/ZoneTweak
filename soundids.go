@@ -32,5 +32,10 @@ const (
 	sndDrip
 	sndAlarm
 	sndBoom
+	sndBeep  // a short two-tone warning beep (a generator running low)
+	sndTone0 // Simon's four tones: green, red, blue, yellow
+	sndTone1
+	sndTone2
+	sndTone3
 	sndCount
 )

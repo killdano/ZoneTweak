@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -496,6 +497,31 @@ func shapeDiff(a, b []pt2) float64 {
 		d = math.Max(d, math.Abs(ea[i]-eb[i]))
 	}
 	return math.Max(d, math.Abs(math.Abs(polyArea(a))-math.Abs(polyArea(b))))
+}
+
+// placeholder: a boundary too small to be anyone's room - the 1 m square Pimax hands SteamVR
+// (Pimax's own compositor draws the real one).
+func placeholder(P []pt2) bool { return len(P) < 3 || math.Abs(polyArea(P)) < 1.5 }
+
+// useSteamUniverse: running under SteamVR, take the boundary SteamVR is using - unless that's
+// Pimax's placeholder square and a Pimax boundary is loaded, in which case the Pimax one is
+// the one the player sees, so it stays. Returns the universe in use.
+func (s *store) useSteamUniverse(live []pt2) string {
+	id := s.steamUniverse(live)
+	if id == "" || id == s.uniID {
+		return s.uniID
+	}
+	prev, prevPimax := s.uniID, s.unis[s.uniID] != nil && s.unis[s.uniID].pimax
+	if err := s.selectUniverse(id); err != nil {
+		return s.uniID
+	}
+	if prevPimax && (placeholder(s.pts) || len(live) >= 3 && placeholder(live)) {
+		log.Printf("SteamVR's universe %s is a placeholder (%d points, %.1f m2): keeping the Pimax boundary %s", id, len(s.pts), math.Abs(polyArea(s.pts)), prev)
+		s.selectUniverse(prev)
+		return prev
+	}
+	log.Printf("switched to SteamVR's universe %s, %d points", id, len(s.pts))
+	return id
 }
 
 // steamUniverse: the universe SteamVR is using now. It's the one in SteamVR's own file whose

@@ -3,12 +3,13 @@ package main
 import "strings"
 
 var buttonTips = []struct{ prefix, tip string }{
+	{"PLAY CONTRABAND", "The bonus game: defend the room you just shaped. Same as pulling the red lever by your boundary. The pause menu brings you back."},
 	{"SAVE & RESTART", "Saves everything, closes ZoneTweak and restarts the Pimax service so your changes load right away."},
 	{"SAVE AS NEW", "Name and store the outline you see now as a saved space, like DOOR OPEN or DOOR CLOSED."},
 	{"SAVED SPACES", "Store named boundaries (door open, door closed...) and switch between them with one press."},
 	{"SAVE", "Writes the boundary, play center and play area to Pimax's files. Pimax shows them after a restart."},
 	{"REVERT", "Throws away unsaved edits and goes back to the last saved boundary."},
-	{"UNDO", "Steps back one edit. Thumbstick click also undoes."},
+	{"UNDO", "Steps back one edit."},
 	{"REDO", "Re-applies the edit you just undid."},
 	{"SQUARE TO ROOM", "Turns the play area so its edges run parallel to your walls."},
 	{"SQUARE UP", "Turns the traced outline into straight walls at right angles, lined up with your room."},
@@ -29,7 +30,7 @@ var buttonTips = []struct{ prefix, tip string }{
 	{"MEDIUM", "2x anti-aliasing, 1K shadows and lighter fog."},
 	{"LOW", "For slower GPUs: no floor reflections, fewer lights, low-res fog."},
 	{"POTATO", "Runs on anything: no anti-aliasing, shadows, floor water, surface detail or mist, very few lights and particles."},
-	{"POINTER", "FLOOR: beam straight down; grab a generator within arm's reach without touching it. LASER: aim from a distance. Press the trackpad (Index) or squeeze (Touch) to switch."},
+	{"POINTER", "FLOOR: beam straight down; grab a generator within arm's reach without touching it. LASER: aim from a distance. Click the thumbstick (or press the Index trackpad) to switch."},
 	{"GHOST", "Shows the last saved outline as a grey line while you edit, so you can compare."},
 	{"REALIGN VIEW", "If ZoneTweak's walls don't line up with your room (after a Pimax recenter, for example), hold the trigger and drag or twist the outline into place. Stick click resets. Doesn't change what's saved."},
 	{"RESTORE ORIGINAL", "Loads Pimax's own boundary from the oldest backup, from before ZoneTweak changed anything. Save to keep it."},

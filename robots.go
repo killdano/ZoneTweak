@@ -1,5 +1,3 @@
-//go:build windows
-
 package main
 
 import (
@@ -113,6 +111,13 @@ type robot struct {
 	cutPt          vec3
 	carryBase      *oldBase
 	svWait         float64
+	// set by the game: where the arms work (instead of a generator), and the body falling
+	workSet bool
+	workAt  pt2
+	workY   float64
+	tilt    float64 // radians, falling forward
+	sink    float64 // metres into the floor
+	noWeld  bool    // arms out but no torch (carrying)
 }
 
 var paints = []rgba{

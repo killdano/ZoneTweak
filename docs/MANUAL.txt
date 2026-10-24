@@ -22,17 +22,27 @@ STEAMVR HEADSETS (Index, Vive, Bigscreen Beyond, Pimax through SteamVR...)
   These SteamVR calls go through Valve's openvr_api.dll (keep it next to the exe).
 
 CONTROLS (either hand)
-  Trackpad press (Index) ....... switch tool: FLOOR beam <-> LASER pointer (with transform)
-    (Touch: squeeze; Vive: use the POINTER menu button)
+  Thumbstick click ............. switch tool: FLOOR beam <-> LASER pointer (with transform)
+    (Index: the trackpad press too; Vive: use the POINTER menu button)
   Trigger near a generator ..... lock the tractor beam on it and move it
     (in FLOOR mode it grabs anything within ~45 cm, no need to stand on it;
      in LASER mode aim anywhere on the shaft, top to bottom, and drag it at that distance)
   Trigger near a wall .......... drop a new generator there and move it
   A on a point ................. delete it
-  Thumbstick click ............. undo
+  Undo / redo .................. on the menu
   B ............................ open / close the menu
   Menu: point the controller tip into a button and pull the trigger.
   The beam's floor ring is where it acts; the faint big ring is the grab range.
+
+CONTRABAND (the bonus game)
+  A red lever on a post stands just inside your boundary, under a PLAY CONTRABAND sign.
+  Put a controller on its handle, hold the grip or the trigger and pull it toward you
+  and down (or press PLAY CONTRABAND at the top of the menu): your controllers turn into
+  gloves and you're defending the boundary you've just made, saved or not. The game's
+  pause menu has BACK TO ZONETWEAK, and you come back to your edits as you left them.
+  How to play: docs/HOW-TO-PLAY.txt. The floor and graphics settings are shared.
+  The lever stands half a metre in from your longest wall and moves when you reshape
+  the boundary (once you let go of what you're dragging).
 
 NEW OUTLINE (menu)
   Walk to each real corner, hold the controller over it, pull the trigger.
@@ -53,7 +63,7 @@ MENU
   FIX FLOOR ...... if ZoneTweak's grid isn't on your real floor (Pimax sometimes starts
                    the app with the floor offset), press it, rest a controller on the
                    floor during the 3 s countdown. View only, nothing is saved.
-  POINTER ........ same as the trackpad press.
+  POINTER ........ same as the thumbstick click.
                    FLOOR = beam straight down (default). LASER = a pointing beam. Either way
                    only one hand is active: the one that pulled the trigger last (pull the
                    other trigger to swap; it won't swap while you're holding a generator).

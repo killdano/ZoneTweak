@@ -1,0 +1,340 @@
+CONTRABAND - the bonus game in ZoneTweak (build 14)
+====================================================
+
+Your real room is a prison cell. The green ring is your real boundary, held up by
+generators. Wardens pour into the hall outside through four doors and lean on your
+ring to drain it. Somewhere on a cart in your room is a half-built EMP. Finish it
+by hand and you're out. Let them carry it out a door and you lose.
+
+It's played in the boundary you've just shaped in ZoneTweak, so the walls you dragged
+into place are the walls you defend.
+
+START
+-----
+1. Set up your play space in ZoneTweak (or in Pimax Play / SteamVR) as usual.
+2. In ZoneTweak, find the red lever on a post just inside your boundary, under the
+   PLAY CONTRABAND sign. Put a controller on its handle, hold the grip (or the
+   trigger) and haul it toward you and down. Your controllers turn into gloves and
+   the game starts in the boundary you've got (saved or not). PLAY CONTRABAND on
+   ZoneTweak's menu does the same.
+3. Pause menu (B pointing at nothing) > BACK TO ZONETWEAK takes you back to editing,
+   with everything as you left it. The results board after a round has it too.
+4. A desktop shortcut can go straight into the game: add --play to its Target
+   ("C:\Games\ZoneTweak\ZoneTweak.exe" --play).
+5. If the gloves don't sit where your real hands are: pause menu > FIT GLOVES. If the
+   floor's at the wrong height: pause menu > SET FLOOR (or ZoneTweak's FIX FLOOR -
+   it's the same floor). Graphics quality, render scale and foveated rendering are on
+   ZoneTweak's GRAPHICS page and apply to the game too.
+6. Something wrong? zonetweak.log beside the exe says what happened (the last
+   session's is zonetweak-prev.log).
+While the app runs it tells Windows you're using the PC, so the monitors don't blank
+or go to sleep halfway through a round.
+
+Other headsets (a Quest 2 over Link or Air Link, Steam Link or Virtual Desktop): the
+game takes the best boundary it can get. If it's only a rectangle or a guess, TRACE
+ROOM on the console: point at the floor and pull the trigger at each corner of your
+play area (your headset's own boundary shows you where it is), then point back at the
+first corner. B takes a corner back. It's saved for that headset; USE BOUNDARY goes
+back to ZoneTweak's boundary.
+
+CONTROLS (Index-style controllers; Vive wands and Touch are mapped too)
+--------
+  Grip (squeeze)         Grab anything physical: levers, pump handles, cranks,
+                         valves, knobs, plugs, fuses, the screwdriver, the wrench,
+                         the flashlight, the radio handset, the cart's push handles,
+                         leech tethers, the prod, the harpoon's grips, its winch and
+                         its line.
+  Index finger out       Poke buttons with your fingertip (keypad, Simon, console).
+  Trigger half-pull      Laser pointer on (aim). Points at console buttons too.
+                         At a loose tool it locks an arc on: flick to pull it over.
+  Trigger full pull      Click a button you're pointing at, or press-drag-release
+                         on the floor out in the hall to draw a magenta wall.
+  Trigger held on a      Take it down: it folds away while you hold (about 1.5 s)
+  magenta wall           and unfolds if you let go early. All its points come back.
+  Thumb on A or B        Laser on, showing what that button will act on.
+  Hold A (1 s)           Supercharge the green span your beam passes through:
+                         anything touching it fries for 5 s, then 20 s to recharge.
+                         On the harpoon turret: supercharge it (loads a spear too).
+  Hold B (1 s)           Supercharge the magenta wall your beam picks out.
+                         Let go of A or B early: cancelled, nothing spent.
+  B at nothing           Pause menu (resume, restart, fit gloves, set floor,
+                         graphics, back to ZoneTweak, quit).
+  Thumbstick click       Pause menu too (and the Menu button on a Quest controller).
+  (Quest: X and Y on the left hand are A and B. No trigger click on Touch: the last
+  bit of the pull is the click.)
+  Left wrist             Next wave countdown, points, device %, supercharge.
+
+FIT GLOVES
+----------
+Open the menu and pick FIT GLOVES. Hold one controller still where it feels natural,
+then squeeze the grip of your other hand right next to that glove: the glove comes
+with your grabbing hand. Move and turn it until it sits where your real hand is, then
+let go. Do the other hand the same way. DONE (or B) finishes, RESET puts both back.
+Fitting one glove fits the other as its mirror image, and the laser moves with the
+glove. To re-aim a laser, grab the ball on it with your other hand and move it where
+you want the laser to point (the other laser mirrors it). The fit is saved for next
+time. Your forearms follow from where your head and hands are.
+
+SETUP
+-----
+- The console in your room: FEWER / MORE generators, and the amber button sets the
+  difficulty (EASY / NORMAL / HARD; it stays set between rounds).
+- Generators and the ring cost points; what's left builds the maze. Draw magenta
+  walls out in the hall so the wardens have to walk further. Too long a detour and
+  they lose patience and burn straight through it. When you draw one, a pod flies
+  out of your hand to each end and deploys into a base station; the wall lights once
+  they're up (it blocks the wardens as soon as you draw it). Hold the trigger on a
+  wall to take it down again; you get all its points back.
+- This is a good time to look around your room for the screwdriver and the wrench,
+  and to spot the prod in its bracket on one of the generators (a blinking amber
+  PROD sign over it; which generator changes every round).
+- When you're ready, pull the big red LIGHTS OUT lever beside the console toward you
+  and down. The hall lights die and the first wave is on its way.
+
+THE SCREWDRIVER AND THE WRENCH
+------------------------------
+Your hands can't turn screws or bolts. Every round one of the cart's covers - the
+access plate on top or the serial compartment's door on its side - is held on by
+screws and the other by bolts (which is which changes), and some blown generators have
+a scorched cover screwed or bolted on too. The screwdriver and the wrench are somewhere
+in your room: on the floor near one of the walls, down by the radio, under the console,
+or in a tool clip on a generator panel. Their chrome catches the light every few
+seconds, and the flashlight makes them shine. The cart has painted outlines where they
+belong (DRIVER and WRENCH); hang them back there and the outline turns green. From
+across the room you can pull them to you (trigger half-pull, then flick).
+The screwdriver: point its tip at a screw head. The tip is magnetic: it snaps into the
+head and stays in until you pull your hand away. Then twist your wrist.
+The wrench: bring its box end over a bolt head, the wrench roughly across the bolt, and
+it drops on. Then swing the handle round the bolt.
+Either way:
+  - the wrong way (clockwise) it glows red and shakes: it won't go any tighter;
+  - counter-clockwise it glows yellow while it breaks loose, then green as it comes out;
+  - there's no ratchet: when your wrist (or your swing) runs out, lift the tool off,
+    turn back, set it back on and go again. Wiggling it back and forth does nothing.
+Each one rises as it comes out. Stuck without the tool you need? A few seconds into a
+step that needs it your contact calls to say where it's lying. Throw one out of your
+room and it turns up back inside.
+
+THE ROUND
+---------
+- THE DEVICE (on the cart): eight hands-on stages, in a different order every round
+  (the plate's always before the wires, the cord always last): unscrew or unbolt the
+  access plate, plug the three wires into the matching sockets, play a game in the
+  side compartment (see THE DEVICE'S GAMES), match the three dials to their marks,
+  wind the coil (it leaks the moment you let go), get the compartment door on the
+  cart's side open (screwed or bolted shut), find the serial number inside (it's dark
+  in there: use the flashlight) and key it in (no ENTER: the right code goes straight
+  through), a second game (always a different one), then the engine: pull the cord
+  hard - the first two pulls turn it over but it doesn't catch, the third fires it up
+  and it shakes the cart and revs - and once it's up to speed (about 4 seconds) push
+  the big red button on top. Touch its cap with a fingertip or slap it. Both power
+  leads have to be plugged into the back of the cart.
+- POWER LEADS: two orange cables run from a POWER box on the floor into the back of
+  the cart. When a warden takes the cart (or the cart goes more than about 2.4 m from
+  the box) they rip out; once it's back, plug them back in - the sockets blink red
+  until you do.
+- GENERATORS: wardens leaning on a span drain the two generators that hold it up.
+  Below 30% a generator beeps and your contact warns you: pump the handle on its panel
+  to top it up (filling it shoves them back), or supercharge the span with A to fry
+  them off it. Ignore it and it blows. A blown generator needs the work order on its
+  panel done before it comes back (patch cable, crank, fuse, valve, breaker, a
+  scorched cover to unscrew or unbolt). Every generator you lose shrinks your room;
+  the breaker lever shrinks it on purpose.
+- LEECHES: drones fly in along the maze, hop over the beam and hover above a generator
+  on a tether clamped to it. Before they bite through (about 4 s) and shut it down:
+  grab the tether and yank it off (the leech limps away and comes back in about a
+  minute), or hit it hard with the prod's electric tip to kill it for good - tethered
+  or flying about. The prod starts in its bracket on one of the generators (a
+  different one every round); when a leech clamps on, your contact says where the
+  prod is. A hard swing takes down a warden or a heavy too, but the third one snaps
+  the prod for the rest of the round.
+- IF THE RING SHRINKS OFF THE DEVICE its backup field holds them off for a few
+  seconds (FIELD and a countdown): grab a push handle and drag the cart back inside
+  your ring. With fewer than three generators your ring is gone: a couple of wardens
+  come straight in for the device while the rest crowd round outside your boundary.
+- WHEN A WARDEN GRABS THE CART (even out of your hands) it hauls it to the closest
+  door, through your maze. Grab a push handle and yank it back hard - a good yank
+  gives you 3 seconds of field to drag it home - or harpoon the warden. If it gets the
+  cart out the door, you lose. The cart is heavy: drag it, don't fling it.
+- THE HARPOON: at 25%, 50% and 75% of the device a turret rises inside your ring.
+  Grab both grips, swing it, pull the trigger. Its lamp: GREEN, a full spear; YELLOW,
+  reel-only (hooks a robot or the cart, no live wire); dark, empty. Reel a robot in
+  with a green spear and it reloads yellow; now and then a load comes yellow from the
+  start, with two reel-ins.
+    A warden: crank the winch (or grab the line and yank) to haul it in - drag it
+    through your green ring or a magenta wall and it fries.
+    The device or its carrier: haul it home the same way. Spearing the cart when
+    they've got it sets off a little EMP: the warden hauling it lets go and the ones
+    round it stumble about for a while.
+    The floor or a wall: the line becomes a live wire that fries whatever walks into
+    it (swing the gun and the line swings with it). Grab the line: it unhooks and goes
+    dead in your hand, and the cleat on the turret's post lights up. Tie it on there
+    and it's a live trap (up to three); let go anywhere else and it's gone. Strung
+    through a magenta wall, a live line keeps the wall supercharged for a minute.
+  TRACTOR BEAM: with no spear loaded and the cart lying on the floor, aim at the cart
+  and pull the trigger: the beam hauls it home and nobody can take it out of it.
+  SUPERCHARGE IT: point at the turret, hold A until the ring fills (it uses your
+  supercharge, and loads a spear if it was spent). A supercharged spear shocks dead
+  everything it hits and flies on through.
+- THE RADIO: your contact only talks into the handset. When something's waiting the
+  lamp blinks and the speaker plays a prompt to pick up. Hold the handset to your ear:
+  you get what's waiting, what matters first (old warnings drop off), then the next
+  wave - how many of what, and which doors. Leave it lying about and it's back on the
+  radio once you look away.
+
+THE DEVICE'S GAMES
+------------------
+Twice a round the device wants a game, behind the hatch on the cart's left side. Each
+time it's one of these (the two are never the same). Botch one and it starts over as
+a different game; it never undoes a stage you'd finished. None of them starts its
+clock until you take hold of it.
+  SIMON        Press START, watch the colours (each has its own tone), repeat them.
+               Three rounds, one longer each time. A wrong button starts it over.
+  NEEDLE       Take the knob and keep the wandering needle in the green; it kicks
+               now and then. Out of the green too long and it starts over.
+  FREQUENCY    Two knobs, HOW FAST and HOW TALL, tune your amber wave onto the green
+               one, which drifts. While they match it locks and the bar fills; let
+               it slip and the bar drains slowly.
+  SAFE         Turn the dial and feel for the numbers: the clicks get heavier as you
+               near one, and right on it there's a clunk (and the SIGNAL meter
+               fills). Stop on it and hold for a second: a lamp lights. Three
+               numbers and it's open.
+  SWITCHBOARD  A caller lamp (1-4) blinks over its cord, and a line lamp (A-D) blinks
+               over the jack it wants: pull that cord's plug and push it into that
+               jack. Four calls to put through. Once you've picked up a plug, calls
+               ring out if you're slow (the lamps blink faster near the end); two lost
+               calls, or plugging into the wrong line twice, starts it over.
+  VALVES       Three handwheels, three gauges. Each valve raises its own gauge but
+               bleeds the next one, so you have to balance them: all three in the
+               green band at once, for three seconds. Leave a gauge in the red for a
+               second and a half and it blows (starts over).
+  FAR SIDE     The code isn't on the hatch: a screen pops up on the far side of the
+               cart, facing away. Walk round, read the five symbols, come back and
+               press them in order on the keypad. Press a wrong one and the code
+               changes - go round and read it again.
+
+MISFIRES
+--------
+About half the time the big red button doesn't set it off: the engine coughs, puts out
+a weak pulse (the wardens near the cart stagger about for ~15 seconds) and dies. A win
+without a misfire makes the next one likelier; after two in a row, it's certain. Then:
+  1. The SERVICE hatch on the back half of the cart's top is held down by four screws
+     or bolts (which one changes) - take them out.
+  2. Grab the handle in its middle and pull it up: the guts come up out of the cart -
+     three layers of boards, wires, thick cables, fuses, circuit cards, relays,
+     capacitors and jumpers.
+  3. Pick up the radio. Your contact tells you the fix - one or two of:
+       cut a wire (by colour, or colour and stripe: "the blue and yellow wire");
+       cut a thick cable and splice in the patch cable;
+       replace a fuse (by colour);
+       replace the burnt circuit card, the cracked relay or the bulging capacitor;
+       pull out a jumper (by colour).
+     Then what each thing looks like and how to do it. Still at it 45 seconds later?
+     He calls back with just that part. After you've heard it, the radio's screen
+     lists it.
+  4. The wire cutters and every spare - a fuse of each colour, a card, a relay, a
+     capacitor, the yellow patch cable - are in the tray on the cart's bottom shelf.
+     Cutters: hold them, put the jaws on the wire, squeeze the trigger. Parts: pull
+     the bad one out, put the spare where it was and let go.
+     The patch cable: once the cable's cut, both cut ends spit sparks and glow yellow
+     with a ghost of the patch across them (PATCH CABLE HERE), and the patch cable
+     in the tray glows too. Pick it up - a line runs from it to the cut - and hold it
+     over the cut so it bridges both ends; when it says LET GO, let go and it clamps
+     on.
+  5. Do anything the fix didn't ask for (the wrong wire, a part that was fine, a
+     wrong-coloured fuse) and the guts sink back into the cart (RESETTING...). Inside,
+     everything gets shuffled - different parts, a different fix. Pull the handle back
+     up and pick up the radio again.
+  6. Done: push the handle back down, start the engine (it's warm: one good pull) and
+     push the button when it lights.
+Now and then (about 1 in 5) it misfires a second time: there are two new things to
+fix. Never a third.
+
+TUNING (optional)
+-----------------
+Every number in the rules can be changed without a new build: copy
+contraband-tuning.sample.json to contraband-tuning.json beside the exe and edit it (you
+can delete the lines you don't change). The handiest ones:
+  pressure     how many robots every wave sends (difficulty multiplies this)
+  drain        how fast wardens leaning on your ring drain a generator
+  waveEvery    seconds between waves        firstWave  seconds to the first one
+  superCool    seconds before you can supercharge again
+  leechBite    seconds before a clamped leech shuts its generator down
+  fieldSecs    seconds the device's backup field holds once it's exposed
+  pool         points for generators, ring and maze
+  maxRobots    walkers and heavies in the hall at once
+If the file has a typo it's ignored (zonetweak.log says why).
+
+KNOWN ROUGH EDGES
+-----------------
+Balance still comes from a simulated player, not real rounds. In a 183 sq ft room it
+wins most rounds on EASY, about half on NORMAL and a third on HARD (it
+doesn't use the supercharged harpoon, the tractor beam, the prod or the force pull).
+What felt wrong, slow, confusing or great? Open an issue.
+
+CHANGES
+=======
+
+BUILD 14
+--------
+- Contraband lives inside ZoneTweak now: a lever and a PLAY CONTRABAND sign stand just
+  inside your boundary (and PLAY CONTRABAND is on ZoneTweak's menu). Pull it and the
+  controllers become gloves; the pause menu's BACK TO ZONETWEAK returns. One app, one
+  log (zonetweak.log), one floor, one set of graphics settings.
+- Five new device games: FREQUENCY, SAFE, SWITCHBOARD, VALVES and FAR SIDE (see THE
+  DEVICE'S GAMES). A round's two game stages are always different games.
+- The prod starts in a bracket on one of the generators (which one changes every
+  round, and with how many generators you have), under a blinking PROD sign. The
+  leech warning ends with where the prod is.
+- Misfire: a wrong move sinks the guts back into the cart before they get shuffled.
+- Misfire: the patch cable shows where it goes (see MISFIRES, step 4).
+- Supercharge recharges 25% slower (20 s, was 15).
+- Windows no longer blanks the monitors or sleeps while you play.
+- The floor fixes itself when it starts too high, too (you're "really short" after
+  picking the headset up off the desk), not just too low.
+- Touch: the trigger clicks at 97% of its pull.
+
+BUILD 13
+--------
+- The last stage is a pull-start engine and a big red button (three pulls cold, one
+  warm).
+- Your contact calls to say where the screwdriver or the wrench is lying.
+- Dropped tools and parts rest on top of things instead of sinking into them.
+- No magenta wall starts from the floor inside your room.
+- One AGAIN button after a round; the maze never carries over.
+- Quest and other headsets: the best boundary the runtime gives, TRACE ROOM for the
+  real shape.
+- The misfire call says what each thing looks like; he calls back if you're stuck.
+- The game follows your room when the headset re-centres.
+- Radio lines say what matters first.
+
+BUILD 12
+--------
+- Misfires (see MISFIRES). EASY sends fewer robots (x0.55 of NORMAL).
+- On a Pimax through SteamVR the game keeps your Pimax boundary (SteamVR's is a 1 m
+  placeholder there).
+
+BUILD 11
+--------
+- The harpoon's green and yellow spears; stages shuffled every round; power leads; the
+  wrench seats at a natural angle.
+
+BUILD 10
+--------
+- Robots have power: supercharges and draining your ring wear them down. Spearing the
+  cart sets off a little EMP. Harpoon lines tie off on the turret's cleat. The wrench.
+  No wiggling screws out. Better button presses. Simon tones. Floor too high? Fixed
+  automatically, or SET FLOOR.
+
+BUILD 9 AND EARLIER
+-------------------
+- Build 9: supercharged walls blast out; tractor beam; swinging live lines; breacher
+  shields; the serial on a paper label; better cart handles.
+- Build 8: hold the trigger to take a magenta wall down; the radio only passes on
+  what's still true; the pole became an electric prod with weight.
+- Build 7: supercharge is a hold; force pull; the supercharged harpoon; clubbing
+  wardens with the prod.
+- Build 6: A for green, B for magenta; FIT GLOVES; the serial compartment; Simon
+  START; the heavy cart; leech tethers; harpoon winch and traps; radio prompts.
+- Builds 3-5: magnetic screwdriver, arm IK, magenta wall pods; the ring follows your
+  real boundary; wardens can take the cart from your hands.

@@ -4,6 +4,7 @@ in vec4 v_col;
 in vec4 v_mat;
 in vec3 v_tex;
 uniform float u_emisGain;
+uniform vec3 u_emisTint = vec3(1.0); // the hall's own lamps dim and redden when the lights go out
 uniform float u_alphaMode;
 out vec4 o_col;
 
@@ -186,7 +187,7 @@ Surf material(int kind, vec3 P, vec3 N, vec3 t, vec3 base, float metal, float ro
 void main() {
     if (v_pos.y < -0.01) discard; // nothing exists under the deck (things sinking into the floor, and their reflections)
     if (v_mat.w > 0.0 || dot(v_nrm, v_nrm) < 0.01) {
-        vec3 c = toLinear(v_col.rgb) * max(v_mat.w, 1.0) * u_emisGain;
+        vec3 c = toLinear(v_col.rgb) * max(v_mat.w, 1.0) * u_emisGain * u_emisTint;
         o_col = vec4(c, u_alphaMode > 0.5 ? v_col.a : 1.0);
         return;
     }

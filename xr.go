@@ -53,6 +53,8 @@ const (
 	xrRefLocal                = 2
 	xrRefStage                = 3
 	xrActionBool              = 1
+	xrActionFloat             = 2
+	xrTypeActionStateFloat    = 24
 	xrActionPose              = 4
 	xrActionVibration         = 100
 	xrStateReady              = 2
@@ -86,6 +88,10 @@ type xrState struct {
 	format                                 int64
 	actionSet                              uintptr
 	aTrigger, aDelete, aMenu, aUndo, aTool uintptr
+	aGrab, aGrabF, aTrigF                  uintptr
+	aGrabForce                             uintptr // Index: how hard you're squeezing (the value is just finger contact)
+	aATouch                                uintptr // a thumb resting on A (Index / Touch capacitive)
+	aBTouch                                uintptr // ...on B
 	aPose, aHaptic, aAim                   uintptr
 	hands                                  [2]xrHand
 	running, quit                          bool
@@ -102,6 +108,7 @@ type xrState struct {
 	dstFBO                                 uint32
 	hasMask                                bool
 	runtimeName                            string
+	systemName                             string        // the headset, as the runtime names it
 	waited                                 time.Duration // time this frame spent blocked in the runtime
 	mask                                   [2][]float32  // hidden-area triangles per eye, view space
 	maskVer                                int
@@ -150,6 +157,31 @@ func cbytes(s string) []byte { return append([]byte(s), 0) }
 func setName(dst []byte, s string) { copy(dst, s) }
 
 func identityPose() xrPose { return xrPose{o: xrQuat{w: 1}} }
+
+// ctrlProfile: the interaction profile each hand's controller is using (".../index_controller",
+// ".../touch_controller"...), once the runtime says.
+var ctrlProfile [2]string
+
+// xrReadProfiles: which controllers are in each hand (logged, and used for the default fit).
+func xrReadProfiles() {
+	for i := range xs.hands {
+		st := struct {
+			typ  int32
+			next uintptr
+			prof uint64
+		}{typ: 53} // XR_TYPE_INTERACTION_PROFILE_STATE
+		if xcall("xrGetCurrentInteractionProfile", xs.session, uintptr(xs.hands[i].path), uintptr(unsafe.Pointer(&st))) != 0 || st.prof == 0 {
+			continue
+		}
+		var buf [256]byte
+		var n uint32
+		if xcall("xrPathToString", xs.inst, uintptr(st.prof), uintptr(len(buf)), uintptr(unsafe.Pointer(&n)), uintptr(unsafe.Pointer(&buf[0]))) == 0 {
+			ctrlProfile[i] = cName(buf[:])
+			log.Printf("hand %d controller profile: %s", i, ctrlProfile[i])
+			onProfile(i, ctrlProfile[i])
+		}
+	}
+}
 
 func xrPath(s string) uint64 {
 	var p uint64
@@ -219,6 +251,11 @@ func xrInit() error {
 	if err := xok(xcall("xrGetSystem", xs.inst, uintptr(unsafe.Pointer(gi)), uintptr(unsafe.Pointer(&xs.sysID))), "xrGetSystem"); err != nil {
 		return fmt.Errorf("%w. Is the headset connected?", err)
 	}
+	sp := &xrSystemProps{typ: 5}
+	if xcall("xrGetSystemProperties", xs.inst, uintptr(xs.sysID), uintptr(unsafe.Pointer(sp))) >= 0 {
+		xs.systemName = cName(sp.systemName[:])
+	}
+	log.Printf("headset: %q (vendor 0x%x)", xs.systemName, sp.vendorID)
 	var bc uint32
 	modes := make([]int32, 8)
 	xcall("xrEnumerateEnvironmentBlendModes", xs.inst, uintptr(xs.sysID), xrStereo, 8, uintptr(unsafe.Pointer(&bc)), uintptr(unsafe.Pointer(&modes[0])))
@@ -390,8 +427,8 @@ func xrLoadMasks() {
 
 func xrCreateActions() error {
 	asi := &xrActionSetCreateInfo{typ: xrTypeActionSetCreateInfo}
-	setName(asi.name[:], "editor")
-	setName(asi.localized[:], "Boundary editing")
+	setName(asi.name[:], "zonetweak")
+	setName(asi.localized[:], "ZoneTweak")
 	if err := xok(xcall("xrCreateActionSet", xs.inst, uintptr(unsafe.Pointer(asi)), uintptr(unsafe.Pointer(&xs.actionSet))), "xrCreateActionSet"); err != nil {
 		return err
 	}
@@ -411,11 +448,17 @@ func xrCreateActions() error {
 		t    int32
 		p    *uintptr
 	}{
-		{"grab", "Grab / place point", xrActionBool, &xs.aTrigger},
-		{"delete", "Delete point", xrActionBool, &xs.aDelete},
+		{"grab", "Grab", xrActionBool, &xs.aGrab},
+		{"grabf", "Grip squeeze", xrActionFloat, &xs.aGrabF},
+		{"grabforce", "Grip force", xrActionFloat, &xs.aGrabForce},
+		{"atouch", "Thumb on A (aim preview)", xrActionBool, &xs.aATouch},
+		{"btouch", "Thumb on B (aim preview)", xrActionBool, &xs.aBTouch},
+		{"trigger", "Laser / fire", xrActionBool, &xs.aTrigger},
+		{"trigf", "Trigger squeeze", xrActionFloat, &xs.aTrigF},
+		{"alt", "Supercharge / remove wall", xrActionBool, &xs.aDelete},
 		{"menu", "Menu", xrActionBool, &xs.aMenu},
-		{"undo", "Undo", xrActionBool, &xs.aUndo},
-		{"tool", "Switch tool mode", xrActionBool, &xs.aTool},
+		{"stick", "Stick click", xrActionBool, &xs.aUndo},
+		{"tool", "Switch pointer mode (ZoneTweak)", xrActionBool, &xs.aTool},
 		{"hand", "Hand pose", xrActionPose, &xs.aPose},
 		{"aim", "Pointer", xrActionPose, &xs.aAim},
 		{"buzz", "Haptics", xrActionVibration, &xs.aHaptic},
@@ -431,16 +474,22 @@ func xrCreateActions() error {
 	}
 	profiles := map[string][]bind{
 		"/interaction_profiles/valve/index_controller": {
-			{&xs.aTrigger, "trigger/click", ""}, {&xs.aDelete, "a/click", ""}, {&xs.aMenu, "b/click", ""},
-			{&xs.aUndo, "thumbstick/click", ""}, {&xs.aTool, "trackpad/force", ""}, {&xs.aPose, "grip/pose", ""}, {&xs.aAim, "aim/pose", ""}, {&xs.aHaptic, "haptic", ""}},
+			{&xs.aGrab, "squeeze/value", ""}, {&xs.aGrabF, "squeeze/value", ""}, {&xs.aGrabForce, "squeeze/force", ""}, {&xs.aTrigger, "trigger/click", ""}, {&xs.aTrigF, "trigger/value", ""},
+			{&xs.aDelete, "a/click", ""}, {&xs.aATouch, "a/touch", ""}, {&xs.aBTouch, "b/touch", ""}, {&xs.aMenu, "b/click", ""}, {&xs.aUndo, "thumbstick/click", ""},
+			{&xs.aTool, "trackpad/force", ""},
+			{&xs.aPose, "grip/pose", ""}, {&xs.aAim, "aim/pose", ""}, {&xs.aHaptic, "haptic", ""}},
 		"/interaction_profiles/htc/vive_controller": {
-			{&xs.aTrigger, "trigger/click", ""}, {&xs.aDelete, "squeeze/click", ""}, {&xs.aMenu, "menu/click", ""},
-			{&xs.aUndo, "trackpad/click", ""}, {&xs.aPose, "grip/pose", ""}, {&xs.aAim, "aim/pose", ""}, {&xs.aHaptic, "haptic", ""}},
+			{&xs.aGrab, "squeeze/click", ""}, {&xs.aGrabF, "squeeze/click", ""}, {&xs.aTrigger, "trigger/click", ""}, {&xs.aTrigF, "trigger/value", ""},
+			{&xs.aDelete, "trackpad/click", ""}, {&xs.aMenu, "menu/click", ""},
+			{&xs.aPose, "grip/pose", ""}, {&xs.aAim, "aim/pose", ""}, {&xs.aHaptic, "haptic", ""}},
 		"/interaction_profiles/oculus/touch_controller": {
-			{&xs.aTrigger, "trigger/value", ""}, {&xs.aDelete, "x/click", "a/click"}, {&xs.aMenu, "y/click", "b/click"},
-			{&xs.aUndo, "thumbstick/click", ""}, {&xs.aTool, "squeeze/value", ""}, {&xs.aPose, "grip/pose", ""}, {&xs.aAim, "aim/pose", ""}, {&xs.aHaptic, "haptic", ""}},
+			{&xs.aGrab, "squeeze/value", ""}, {&xs.aGrabF, "squeeze/value", ""}, {&xs.aTrigger, "trigger/value", ""}, {&xs.aTrigF, "trigger/value", ""},
+			{&xs.aDelete, "x/click", "a/click"}, {&xs.aATouch, "x/touch", "a/touch"}, {&xs.aBTouch, "y/touch", "b/touch"}, {&xs.aMenu, "y/click", "b/click"}, {&xs.aUndo, "thumbstick/click", ""},
+			{&xs.aUndo, "menu/click", "-"},
+			{&xs.aPose, "grip/pose", ""}, {&xs.aAim, "aim/pose", ""}, {&xs.aHaptic, "haptic", ""}},
 		"/interaction_profiles/khr/simple_controller": {
-			{&xs.aTrigger, "select/click", ""}, {&xs.aMenu, "menu/click", ""}, {&xs.aPose, "grip/pose", ""}, {&xs.aAim, "aim/pose", ""}, {&xs.aHaptic, "haptic", ""}},
+			{&xs.aGrab, "select/click", ""}, {&xs.aTrigger, "select/click", ""}, {&xs.aMenu, "menu/click", ""},
+			{&xs.aPose, "grip/pose", ""}, {&xs.aAim, "aim/pose", ""}, {&xs.aHaptic, "haptic", ""}},
 	}
 	suggest := func(prof string, bs []bind, skipTool bool) int32 {
 		var sb []xrSuggestedBinding
@@ -450,6 +499,9 @@ func xrCreateActions() error {
 			}
 			for side, hand := range []string{"left", "right"} {
 				comp := b.l
+				if side == 1 && b.r == "-" {
+					continue // that one's on the left controller only
+				}
 				if side == 1 && b.r != "" {
 					comp = b.r
 				}
@@ -469,8 +521,10 @@ func xrCreateActions() error {
 		r := suggest(prof, bs, false)
 		log.Printf("bindings %s: %d", prof, r)
 		if r != 0 {
+			// a runtime that won't take the trackpad's force as a button: without it (the
+			// stick click switches the pointer too)
 			r = suggest(prof, bs, true)
-			log.Printf("bindings %s without tool button: %d", prof, r)
+			log.Printf("bindings %s without the trackpad force: %d", prof, r)
 		}
 	}
 	return nil
@@ -487,6 +541,8 @@ func xrPollEvents() {
 			xs.quit = true
 		case 1000031001: // the runtime changed the lens mask (FOV or IPD setting)
 			xrLoadMasks()
+		case 52: // XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED
+			xrReadProfiles()
 		case 40:
 			ev := (*xrEventSpaceChange)(unsafe.Pointer(xs.event))
 			log.Printf("reference space %d changed, pose valid %d, pos %.3f %.3f %.3f", ev.refType, ev.poseValid, ev.pose.p.x, ev.pose.p.y, ev.pose.p.z)
@@ -496,6 +552,9 @@ func xrPollEvents() {
 		case xrTypeEventSessionState:
 			st := (*xrEventSessionState)(unsafe.Pointer(xs.event)).state
 			log.Printf("session state %d", st)
+			if st == 5 {
+				focusSeq++ // the headset's on (again)
+			}
 			switch st {
 			case xrStateReady:
 				bi := &xrSessionBeginInfo{typ: xrTypeSessionBeginInfo, viewConfig: xrStereo}
@@ -521,6 +580,18 @@ func xrBool(action uintptr, sub uint64) bool {
 		return false
 	}
 	return st.active != 0 && st.current != 0
+}
+
+func xrFloat(action uintptr, sub uint64) float64 {
+	if action == 0 {
+		return 0
+	}
+	gi := &xrActionStateGetInfo{typ: xrTypeActionStateGetInfo, action: action, subPath: sub}
+	st := &xrActionStateFloat{typ: xrTypeActionStateFloat}
+	if xcall("xrGetActionStateFloat", xs.session, uintptr(unsafe.Pointer(gi)), uintptr(unsafe.Pointer(st))) < 0 || st.active == 0 {
+		return 0
+	}
+	return float64(st.current)
 }
 
 func xrLocate(space uintptr, t int64) (hmdMatrix34, bool) {
@@ -660,4 +731,30 @@ func xrShutdown() {
 		xcall("xrDestroyInstance", xs.inst)
 		xs.inst = 0
 	}
+}
+
+// xrSystemProps: XrSystemProperties.
+type xrSystemProps struct {
+	typ        int32
+	next       uintptr
+	sysID      uint64
+	vendorID   uint32
+	systemName [256]byte
+	gfx        [3]uint32
+	tracking   [2]uint32
+}
+
+// xrStageBounds: the play area the runtime reports for STAGE - a rectangle round the stage's
+// origin (width along x, depth along z), if it has one.
+func xrStageBounds() (float64, float64, bool) {
+	if xs.session == 0 || xs.stageName != "STAGE" {
+		return 0, 0, false
+	}
+	var ext [2]float32
+	r := xcall("xrGetReferenceSpaceBoundsRect", xs.session, xrRefStage, uintptr(unsafe.Pointer(&ext[0])))
+	log.Printf("stage bounds rect: %.2f x %.2f (XrResult %d)", ext[0], ext[1], r)
+	if r != 0 || ext[0] <= 0 || ext[1] <= 0 {
+		return 0, 0, false
+	}
+	return float64(ext[0]), float64(ext[1]), true
 }

@@ -1,5 +1,3 @@
-//go:build windows
-
 package main
 
 import (
@@ -22,6 +20,16 @@ func ringSoft(c vec3, r, w float64, col rgba, segs int) {
 		p1 := v3(c.x+r*math.Cos(a1), c.y, c.z+r*math.Sin(a1))
 		bGlowLine.line(p0, p1, col)
 		ribbon(p0, p1, w, col.alpha(col.a*0.4))
+	}
+}
+
+// ringSoftAxes: ringSoft in any plane (u and w span it).
+func ringSoftAxes(c, u, w vec3, r, wd float64, col rgba, segs int) {
+	at := func(a float64) vec3 { return c.add(u.mul(r * math.Cos(a))).add(w.mul(r * math.Sin(a))) }
+	for s := 0; s < segs; s++ {
+		p0, p1 := at(2*math.Pi*float64(s)/float64(segs)), at(2*math.Pi*float64(s+1)/float64(segs))
+		bGlowLine.line(p0, p1, col)
+		ribbon(p0, p1, wd, col.alpha(col.a*0.4))
 	}
 }
 

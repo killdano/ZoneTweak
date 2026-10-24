@@ -52,6 +52,45 @@ func TestSteamUniverse(t *testing.T) {
 	}
 }
 
+// A Pimax headset under SteamVR: SteamVR's own boundary is Pimax's 1 m placeholder square
+// (Pimax's compositor draws the real one), so the Pimax boundary stays. A real SteamVR room
+// still wins.
+func TestSteamPlaceholderKeepsPimax(t *testing.T) {
+	tmp := t.TempDir()
+	steamCfg := filepath.Join(tmp, "steam", "config")
+	ovrDir := filepath.Join(tmp, "openvr")
+	t.Setenv("ProgramData", tmp)
+	t.Setenv("LOCALAPPDATA", tmp)
+	os.MkdirAll(ovrDir, 0755)
+	os.WriteFile(filepath.Join(ovrDir, "openvrpaths.vrpath"), []byte(`{"config":[`+string(must2(json.Marshal(steamCfg)))+`]}`), 0644)
+	square := []pt2{{-0.5, -0.5}, {-0.5, 0.5}, {0.5, 0.5}, {0.5, -0.5}}
+	room := []pt2{{-1.5, -2}, {1.5, -2}, {1.6, 2.4}, {-1.4, 2.5}, {-1.6, 0}}
+	vrchap(t, filepath.Join(steamCfg, "chaperone_info.vrchap"), map[string][]pt2{"30": square}, map[string]string{"30": "2026-10-02 15:00:55"})
+	pim := filepath.Join(tmp, "Pimax", "runtime", "chaperone_info_openvr.vrchap")
+	b, _ := json.Marshal(map[string]any{"jsonid": "chaperone_info", "version": 5, "universes": []any{
+		map[string]any{"universeID": "30", "collision_bounds": makeBounds(square, 2.43), "standing": map[string]any{"translation": []any{0.0, 0.0, 0.0}, "yaw": 0.0}},
+		map[string]any{"universeID": "31", "center_calied": true, "floor_calied": true, "collision_bounds": makeBounds(room, 2.43), "standing": map[string]any{"translation": []any{0.0, 0.0, 0.0}, "yaw": 0.0}},
+	}})
+	os.MkdirAll(filepath.Dir(pim), 0755)
+	os.WriteFile(pim, b, 0644)
+	s, err := loadStore("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.uniID != "31" {
+		t.Fatal("should start on the Pimax boundary, got", s.uniID)
+	}
+	if id := s.useSteamUniverse(square); id != "31" || len(s.pts) != len(room) {
+		t.Fatalf("SteamVR's placeholder square replaced the Pimax boundary (%s, %d points)", id, len(s.pts))
+	}
+	// a real room in SteamVR's own file: that's the one
+	vrchap(t, filepath.Join(steamCfg, "chaperone_info.vrchap"), map[string][]pt2{"30": square, "40": room}, map[string]string{"30": "2026-10-02 15:00:55", "40": "2026-10-03 10:00:00"})
+	s, _ = loadStore("")
+	if id := s.useSteamUniverse(room); id != "40" {
+		t.Fatal("a real SteamVR room should be used, got", id)
+	}
+}
+
 func must2(b []byte, _ error) []byte { return b }
 
 func TestSteamZone(t *testing.T) {

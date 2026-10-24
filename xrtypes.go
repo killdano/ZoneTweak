@@ -255,6 +255,15 @@ type xrActionStateBool struct {
 	active     uint32
 }
 
+type xrActionStateFloat struct {
+	typ        int32
+	next       uintptr
+	current    float32
+	changed    uint32
+	lastChange int64
+	active     uint32
+}
+
 type xrSpaceLocation struct {
 	typ   int32
 	next  uintptr

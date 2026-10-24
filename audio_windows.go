@@ -4,6 +4,7 @@ package main
 
 import (
 	"log"
+	"runtime/debug"
 	"syscall"
 	"time"
 	"unsafe"
@@ -104,6 +105,11 @@ func startAudio() {
 	snd.running = true
 	log.Println("audio started")
 	go func() {
+		defer func() {
+			if e := recover(); e != nil {
+				log.Printf("audio PANIC (sound stopped): %v\n%s", e, debug.Stack())
+			}
+		}()
 		for !snd.quit {
 			busy := true
 			for i, hd := range audioHdrs {

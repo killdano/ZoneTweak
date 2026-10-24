@@ -269,7 +269,19 @@ func frameAt(o, fwd vec3) xf {
 	return xf{o, s, v3(0, 1, 0), fwd}
 }
 
+// level of detail switches for things drawn far away (robots in a crowd): plain boxes
+// instead of chamfered ones, and no rivets or circuit chips
+var (
+	lodPlainBox bool
+	lodNoTrim   bool
+)
+
 func bevelBox(b *batch, c, ax, ay, az vec3, hx, hy, hz, ch float64, col rgba) {
+	if lodPlainBox {
+		defer withTex(xf{c, ax, ay, az})()
+		fastBox(b, xf{c, ax, ay, az}, 0, 0, 0, hx, hy, hz, col)
+		return
+	}
 	A := [3]vec3{ax, ay, az}
 	H := [3]float64{hx, hy, hz}
 	ch = math.Min(ch, 0.45*math.Min(hx, math.Min(hy, hz)))
@@ -426,4 +438,15 @@ var (
 	cMetalDk                                                     = rgba{0.22, 0.25, 0.29, 1}
 )
 
-func fxTime() float64 { return time.Since(fxStart).Seconds() }
+// simClockOn: the preview drives time itself (deterministic screenshots)
+var (
+	simClockOn bool
+	simClock   float64
+)
+
+func fxTime() float64 {
+	if simClockOn {
+		return simClock
+	}
+	return time.Since(fxStart).Seconds()
+}
