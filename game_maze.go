@@ -13,6 +13,9 @@ import (
 	"sort"
 )
 
+// cWallBad: a magenta wall you're drawing where it can't go (yellow, nothing like magenta)
+var cWallBad = rgba{1, 0.82, 0.08, 1}
+
 type mazePost struct {
 	p       pt2
 	from    vec3    // where its pod is launched from

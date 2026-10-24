@@ -869,7 +869,8 @@ func (g *game) drawBeam(gh *gHand) {
 		cost, why := r.CheckWall(sv(a), sv(b))
 		wc := cMagenta
 		if why != "" {
-			wc = cDanger
+			// can't go there: a warning yellow (red's too near magenta to notice), flickering
+			wc = cWallBad.scale(float32(0.75 + 0.25*math.Sin(fxTime()*14)))
 		}
 		energySheet(a, b, func(float64) float64 { return 0.05 }, func(float64) float64 { return r.T.WallHeight }, nil, wc, 0.35, 999)
 		mid := fl(lerp2(a, b, 0.5), r.T.WallHeight+0.25)
