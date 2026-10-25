@@ -78,7 +78,7 @@ def cover(W=1600, H=1000):
     # the game side graded a little warmer and harder, so the two halves read apart
     r, g, b = game.split()
     game = Image.merge('RGB', (r.point(lambda v: min(255, int(v * 1.18 + 6))), g.point(lambda v: int(v * 0.9)), b.point(lambda v: int(v * 0.95))))
-    top, bot = W * 0.6, W * 0.44  # where the seam meets the top and bottom edges
+    top, bot = W * 0.645, W * 0.47  # where the seam meets the top and bottom edges
     m = Image.new('L', (W, H), 0)
     ImageDraw.Draw(m).polygon([(top, 0), (W, 0), (W, H), (bot, H)], fill=255)
     img = Image.composite(game, zone, m.filter(ImageFilter.GaussianBlur(1))).convert('RGBA')
@@ -131,29 +131,57 @@ def cover(W=1600, H=1000):
     tracked(ImageDraw.Draw(glow), (x, y0), "TWEAK", ft, GREEN + (170,), 5)
     img = Image.alpha_composite(img, glow.filter(ImageFilter.GaussianBlur(16)))
     img = Image.alpha_composite(img, layer)
-    fs = ImageFont.truetype(F_MED, 28)
-    img, _ = clean_text(img, (x0 + 6, y0 + 146), "PLAY-SPACE EDITOR FOR PIMAX & STEAMVR", fs, (236, 244, 238, 255), 5, 14)
+    tw = text_width(ImageDraw.Draw(img), "ZONETWEAK", ft, 5)
+    tl, tt, _, tb = ft.getbbox("Z")
 
-    # + CONTRABAND, a stencilled red plate under it
-    fc = ImageFont.truetype(F_BLACK, 84)
-    fsm = ImageFont.truetype(F_MED, 26)
-    cy = y0 + 214
-    plus = ImageFont.truetype(F_BLACK, 64)
+    # "+ CONTRABAND" under it as the rest of the name: the + in the title's own white, the
+    # game's name on a red plate that ends where ZONETWEAK does, its text dead centre on it
+    line2 = y0 + 152
+    plus = ImageFont.truetype(F_BLACK, 104)
+    pd0 = ImageDraw.Draw(img)
+    pl_, pt_, pr_, pb_ = plus.getbbox("+")
+    plus_w = pr_ - pl_
+    gap, pad_x, pad_y = 22, 26, 18
+    plate_x0 = x0 + plus_w + gap
+    plate_x1 = x0 + tw
+    # the biggest CONTRABAND that fits the plate
+    size = 100
+    while size > 40:
+        fc = ImageFont.truetype(F_BLACK, size)
+        if text_width(pd0, "CONTRABAND", fc, 5) <= plate_x1 - plate_x0 - 2 * pad_x:
+            break
+        size -= 2
+    cw = text_width(pd0, "CONTRABAND", fc, 5)
+    cl_, ct_, _, cb_ = fc.getbbox("CONTRABAND")
+    ch = cb_ - ct_
+    plate_y0 = line2
+    plate_y1 = line2 + ch + 2 * pad_y
+    tx = plate_x0 + (plate_x1 - plate_x0 - cw) / 2 - cl_
+    ty = plate_y0 + pad_y - ct_
     pl = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     pd = ImageDraw.Draw(pl)
-    cw = text_width(pd, "CONTRABAND", fc, 6)
-    pd.rectangle([x0 - 2, cy - 4, x0 + 84 + cw + 26, cy + 104], fill=(44, 6, 4, 210))
-    pd.rectangle([x0 - 2, cy - 4, x0 + 84 + cw + 26, cy + 104], outline=RED + (255,), width=3)
+    pd.rectangle([plate_x0, plate_y0, plate_x1, plate_y1], fill=(44, 6, 4, 215))
+    pd.rectangle([plate_x0, plate_y0, plate_x1, plate_y1], outline=RED + (255,), width=3)
     img = Image.alpha_composite(img, pl)
-    img, _ = clean_text(img, (x0 + 14, cy + 10), "+", plus, RED + (255,), 0)
-    cl = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    tracked(ImageDraw.Draw(cl), (x0 + 74, cy + 4), "CONTRABAND", fc, (255, 92, 70, 255), 6)
-    cl.putalpha(ImageChops.multiply(cl.getchannel('A'), grunge_mask(W, H)))
+    # the +, centred on the plate's height, grunged like the title
+    pls = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    py = (plate_y0 + plate_y1) / 2 - (pt_ + pb_) / 2
+    ImageDraw.Draw(pls).text((x0 - pl_, py), "+", font=plus, fill=(226, 232, 228, 255))
+    pls.putalpha(ImageChops.multiply(pls.getchannel('A'), grunge_mask(W, H)))
+    img = Image.alpha_composite(img, pls)
     cg = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    tracked(ImageDraw.Draw(cg), (x0 + 74, cy + 4), "CONTRABAND", fc, RED + (190,), 6)
+    tracked(ImageDraw.Draw(cg), (tx, ty), "CONTRABAND", fc, RED + (190,), 5)
     img = Image.alpha_composite(img, cg.filter(ImageFilter.GaussianBlur(14)))
+    cl = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    tracked(ImageDraw.Draw(cl), (tx, ty), "CONTRABAND", fc, (255, 92, 70, 255), 5)
+    cl.putalpha(ImageChops.multiply(cl.getchannel('A'), grunge_mask(W, H)))
     img = Image.alpha_composite(img, cl)
-    img, _ = clean_text(img, (x0 + 6, cy + 128), "A VR GAME IN YOUR OWN ROOM - INCLUDED", fsm, AMBER + (255,), 5, 14)
+
+    # what they are
+    fs = ImageFont.truetype(F_MED, 27)
+    sy = plate_y1 + 30
+    img, _ = clean_text(img, (x0 + 6, sy), "PLAY-SPACE EDITOR FOR PIMAX & STEAMVR", fs, (236, 244, 238, 255), 5, 14)
+    img, _ = clean_text(img, (x0 + 6, sy + 46), "A VR GAME IN YOUR OWN ROOM, INCLUDED", fs, AMBER + (255,), 5, 14)
 
     # the tagline along the bottom, split across the seam: edit it on the left, defend it on the right
     fb = ImageFont.truetype(F_BLACK, 44)
