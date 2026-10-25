@@ -184,7 +184,7 @@ func (e *editor) buildPages() {
 		},
 		buttons: func() []button {
 			return []button{
-				{label: func() string { return "PLAY CONTRABAND" }, sub: "THE BONUS GAME - NOW DEFEND YOUR ZONE", span: 2, big: true, act: func() {
+				{label: func() string { return "PLAY CONTRABAND" }, sub: "TWEAK YOUR ZONE. THEN DEFEND IT.", span: 2, big: true, act: func() {
 					e.menuOpen = false
 					if onPlay != nil {
 						onPlay()
@@ -1225,8 +1225,9 @@ func (e *editor) buildPanel() {
 	}
 	for _, sx := range []float64{-1, 1} {
 		e.panelBox(sx*(w2+0.012), 0, 0.0, 0.008, h2+0.004, 0.008, 0.004, cMetalDk)
-		e.panelBox(sx*(w2+0.03), 0, -0.01, 0.012, h2*0.7, 0.014, 0.006, cArmor)
-		a, b := e.panelPoint(sx*(w2+0.043), -h2*0.6, -0.004), e.panelPoint(sx*(w2+0.043), h2*0.6, -0.004)
+		// armour rails down both sides, the full height of the frame
+		e.panelBox(sx*(w2+0.03), 0, -0.01, 0.012, h2+0.016, 0.014, 0.006, cArmor)
+		a, b := e.panelPoint(sx*(w2+0.043), -h2+0.02, -0.004), e.panelPoint(sx*(w2+0.043), h2-0.02, -0.004)
 		ribbon(a, b, 0.01, cBeam.alpha(0.5))
 		bGlowLine.line(a, b, cBeam.alpha(0.9))
 		for _, sy := range []float64{-1, 1} {

@@ -40,8 +40,10 @@ CONTRABAND (the bonus game)
   controllers turned into gloves. The game's pause menu has BACK TO ZONETWEAK: another fade
   and you're back to your edits as you left them. How to play: HOW-TO-PLAY.txt. The floor
   and graphics settings are shared. ZoneTweak.exe --play starts straight in the game.
-  Its leech drones drift about the cell up above your generators in ZoneTweak too (set
-  dressing: they keep over the generators and robots, under the lamps, and apart).
+  Its leech drones roam the hall outside your boundary in ZoneTweak too, at about head
+  height: door to door, out of one door and back in through another, stopping to look at
+  you. Set dressing: they fly the routes the robots walk, clear of your walls and
+  generators, and climb over a robot or another drone instead of running into it.
 
 NEW OUTLINE (menu)
   Walk to each real corner, hold the controller over it, pull the trigger.

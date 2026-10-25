@@ -32,7 +32,7 @@ pick:
   floor hatch, overload) while the boundary updates instantly.
 - **Set dressing (visual only)**: the boundary is drawn as laser walls between generator
   posts in a grim industrial prison, with robots that repair, salvage and fight the
-  occasional fire, and Contraband's leech drones drifting about overhead. All procedural, with a fully synthesized sound engine. None of it is
+  occasional fire, and Contraband's leech drones roaming the hall from door to door. All procedural, with a fully synthesized sound engine. None of it is
   written to Pimax.
 - **Graphics presets**: from Ultra down to Potato, applied instantly, plus a render scale,
   fixed foveated rendering on NVIDIA GPUs and live per-pass GPU timings on the graphics page.

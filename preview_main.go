@@ -369,7 +369,13 @@ func main() {
 		if v == "menu" {
 			ed.openMenu()
 		}
-		for k := 0; k < 90; k++ {
+		zf := 90
+		if v := os.Getenv("ZONESECS"); v != "" {
+			var secs float64
+			fmt.Sscan(v, &secs)
+			zf = int(secs / dt)
+		}
+		for k := 0; k < zf; k++ {
 			simClock += dt
 			frameDT = dt
 			ed.cur = ed.page.buttons()

@@ -61,38 +61,67 @@ func samePts(a, b []pt2) bool {
 	return true
 }
 
-// ZoneTweak's roaming drones keep over the generators' tops, inside the cell, clear of the
-// lamps and apart from each other.
+// ZoneTweak's roaming drones go about the hall at head height without ever getting near
+// your walls and generators, each other or a robot (they go over the top), and come and go
+// through the doors.
 func TestZoneDrones(t *testing.T) {
 	simClockOn, simClock = true, 0
-	defer func() { simClockOn = false; zDrones = nil }()
+	saveR := robots
+	defer func() { simClockOn = false; zDrones = nil; robots = saveR }()
 	zDrones = nil
 	P := []pt2{{-1.5, -1.2}, {1.5, -1.2}, {1.5, 1.2}, {-1.5, 1.2}}
 	ed.pts, ed.orig, ed.height = clonePts(P), clonePts(P), 2.4
 	ed.drawing = false
 	resetEngineForZone()
 	ed.buildEnvironment()
-	lo, _ := ed.droneHeights()
-	worst := math.Inf(1)
-	for k := 0; k < 90*120; k++ {
+	if len(world.doors) == 0 {
+		t.Fatal("no doors")
+	}
+	// a robot standing in the hall by a door, in the drones' way
+	bot := &robot{pos: world.doors[0].mouth, gen: -1}
+	robots = []*robot{bot}
+	trips, wasAway := 0, make([]bool, zDroneN)
+	low, flown := 0, 0.0
+	last := map[*zDrone]pt2{}
+	for k := 0; k < 90*240; k++ {
 		simClock += 1.0 / 90
 		ed.dronesFrame(1.0 / 90)
 		for i, d := range zDrones {
-			if d.h < lo-0.15 || d.h < ed.height+0.4 {
-				t.Fatalf("drone %d down at %.2f m, among the generators", i, d.h)
+			if p, ok := last[d]; ok && !d.away && dist2(p, d.pos) < 0.5 {
+				flown += dist2(p, d.pos)
 			}
-			q := envG.inv().apply(d.pos)
-			if q[0] < envBox[0] || q[0] > envBox[1] || q[1] < envBox[2] || q[1] > envBox[3] {
-				t.Fatalf("drone %d out through the cell's walls", i)
+			last[d] = d.pos
+			if d.away {
+				wasAway[i] = true
+				continue
+			}
+			if wasAway[i] {
+				trips++
+				wasAway[i] = false
+			}
+			if d.h < 1.8 {
+				low++
+			}
+			if d.h < ed.height+0.3 && !ed.droneClear(d.pos) {
+				t.Fatalf("drone %d at %.2f m, in among your walls (%.2f from the boundary)", i, d.h, outsideDist(P, d.pos))
+			}
+			if dist2(d.pos, bot.pos) < 0.8 && d.h < 2.6 {
+				t.Fatalf("drone %d flew into the robot (%.2f away at %.2f m)", i, dist2(d.pos, bot.pos), d.h)
 			}
 			for j, o := range zDrones {
-				if j > i {
-					worst = math.Min(worst, math.Hypot(dist2(d.pos, o.pos), d.h-o.h))
+				if j > i && !o.away && dist2(d.pos, o.pos) < 0.6 && math.Abs(d.h-o.h) < 0.4 {
+					t.Fatalf("drones %d and %d ran into each other at %.1f s: %v h %.2f path %d hold? / %v h %.2f path %d", i, j, simClock, d.pos, d.h, len(d.path), o.pos, o.h, len(o.path))
 				}
 			}
 		}
 	}
-	if len(zDrones) != zDroneN || worst < 0.5 {
-		t.Fatalf("%d drones, closest pair %.2f m apart", len(zDrones), worst)
+	if trips < 3 {
+		t.Fatalf("only %d trips in through a door in four minutes", trips)
+	}
+	if flown < 30 {
+		t.Fatalf("they should get about (flew %.0f m between them in four minutes)", flown)
+	}
+	if low == 0 {
+		t.Fatal("they should mostly cruise at head height")
 	}
 }
