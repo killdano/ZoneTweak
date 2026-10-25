@@ -411,6 +411,13 @@ func main() {
 		m := G.poleMount()
 		fmt.Fprintf(os.Stderr, "pole head %.2f,%.2f,%.2f, bracket on generator %d at %.2f,%.2f\n", hd.x, hd.y, hd.z, m.gen, m.at.X, m.at.Z)
 	}
+	if os.Getenv("ROBOTS") != "" {
+		for _, b := range G.r.Robots {
+			if b.Alive() {
+				fmt.Fprintf(os.Stderr, "robot %d kind %d state %d at %.2f,%.2f\n", b.ID, b.Kind, b.State, b.Pos.X, b.Pos.Z)
+			}
+		}
+	}
 	for _, d := range G.r.Doors {
 		fmt.Fprintf(os.Stderr, "door %s wall %.2f,%.2f out %.2f,%.2f\n", d.Name, d.Wall.X, d.Wall.Z, d.Out.X, d.Out.Z)
 	}
