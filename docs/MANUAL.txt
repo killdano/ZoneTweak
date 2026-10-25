@@ -71,6 +71,10 @@ MENU
                    Point it at the menu to select buttons. Good for points behind a wall.
                    The laser is smoothed (One Euro filter): slow, careful moves are steady
                    even with a shaky hand, fast moves still follow quickly.
+  FIT TOOL ....... move the tool to where it feels right in your hand: grab one tool with
+                   your other hand (the grip), move and turn it, let go to keep it. The
+                   other tool mirrors it, and the beam follows the tool. B finishes,
+                   thumbstick click puts both back. Saved for next time.
   PLAY AREA ...... on the floor next to the yellow play center there's a padlock. Point at
                    it and pull the trigger to unlock. Then, on the floor:
                    yellow center post = move, curved yellow arrows = drag around to turn,

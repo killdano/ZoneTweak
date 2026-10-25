@@ -19,7 +19,8 @@ pick:
 ## Features
 
 - **Edit the boundary in VR**: move, add and delete corners with a floor beam or a laser
-  pointer. Undo, Square Up, Simplify and optional magnetic snapping.
+  pointer. Undo, Square Up, Simplify and optional magnetic snapping. FIT TOOL moves the
+  tool to where it feels right on your controller.
 - **Saved play spaces**: name layouts (for example "Door open" / "Door closed") and switch
   between them in VR or from a desktop shortcut (`ZoneTweak.exe --use "Door open"`).
 - **Play area tools**: move, rotate and stretch the play area, and fit or center it in the room.

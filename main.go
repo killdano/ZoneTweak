@@ -191,6 +191,7 @@ func main() {
 	qualityIdx, appDir = qi, dir
 	gloveDir = dir
 	loadGloves()
+	loadToolFit()
 	rr, err := newRenderer(qi)
 	if err != nil {
 		fail("Graphics setup failed: " + err.Error())
@@ -347,6 +348,10 @@ func main() {
 			h.m, h.aim = fixPose(h.m), fixPose(h.aim)
 			h.m[1][3] -= float32(floorOff)
 			h.aim[1][3] -= float32(floorOff)
+			h.rawM, h.rawAim = h.m, h.aim
+			if appMode == modeZone && h.aimValid {
+				h.m, h.aim = fitTool(i, h.rawM, h.rawAim) // the tool where you've fitted it
+			}
 			h.updateLaser(frameDT)
 			h.prev = h.pressed
 			h.pressed = 0
@@ -411,9 +416,13 @@ func main() {
 			G.buildScene()
 		} else {
 			ed.cur = ed.page.buttons()
-			for _, h := range hs {
-				if h.valid {
-					ed.handleHand(h)
+			if ed.toolFitting {
+				ed.toolFitFrame()
+			} else {
+				for _, h := range hs {
+					if h.valid {
+						ed.handleHand(h)
+					}
 				}
 			}
 			ed.updateFloor()

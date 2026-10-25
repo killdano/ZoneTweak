@@ -19,6 +19,7 @@ var buttonTips = []struct{ prefix, tip string }{
 	{"SNAP", "ON: dragged points pull square to their neighbors. OFF: free movement for fine adjustments."},
 	{"ZONE SETTINGS", "How close you can get before Pimax's safety zone appears, a live proximity test, and the zone on/off switch."},
 	{"FIX FLOOR", "If ZoneTweak's grid isn't on your real floor: rest a controller on the floor during the countdown. View only, nothing is saved."},
+	{"FIT TOOL", "Move the tool to where it feels right in your hand: grab one with your other hand and move and turn it; the other mirrors it. B finishes, thumbstick resets."},
 	{"GRAPHICS", "Quality presets, render scale and foveated rendering, with live GPU and CPU timings."},
 	{"RENDER SCALE", "Renders fewer pixels and scales up to the headset. Each step down is roughly 20% less GPU work, a little softer."},
 	{"FOVEATED", "Shades the outer part of each eye at a lower rate, where the lens blurs it anyway. NVIDIA RTX and GTX 16 GPUs."},

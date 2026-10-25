@@ -248,6 +248,7 @@ func (e *editor) buildPages() {
 					}
 					return "POINTER: DOWN"
 				}, act: func() { e.laser = !e.laser; toolSwitch = fxTime(); e.sfx(sndTool, e.hmd.pos(), 0.6) }, on: func() bool { return e.laser }},
+				{label: func() string { return "FIT TOOL" }, act: e.startToolFit},
 				{label: func() string { return "GRAPHICS: " + qualities[qualityIdx].name }, act: func() { e.page = e.pageGfx }},
 				{label: func() string {
 					if e.feet {
@@ -1145,6 +1146,7 @@ func (e *editor) buildScene() {
 	}
 
 	e.drawBaseStations()
+	e.drawToolFit()
 	touching := e.updateWallContacts(frameDT)
 	e.updateRobots(frameDT)
 	e.dronesFrame(frameDT)

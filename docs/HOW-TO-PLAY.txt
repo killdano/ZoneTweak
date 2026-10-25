@@ -288,6 +288,8 @@ BUILD 14
 - Misfire: the patch cable shows where it goes (see MISFIRES, step 4).
 - Supercharge recharges 25% slower (20 s, was 15).
 - Windows no longer blanks the monitors or sleeps while you play.
+- ZoneTweak has FIT TOOL (on its menu), the same idea as FIT GLOVES: grab the tool with
+  your other hand and move it where it sits right in your hand.
 - The floor fixes itself when it starts too high, too (you're "really short" after
   picking the headset up off the desk), not just too low.
 - Touch: the trigger clicks at 97% of its pull.

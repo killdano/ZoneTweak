@@ -80,6 +80,11 @@ type hand struct {
 	grip, trig     float64 // analog squeeze (0..1)
 	force          float64 // Index: squeeze force (0 when the controller doesn't report it)
 	aTouch, bTouch bool    // thumb resting on A / B
+	// ZoneTweak's tool fit: the poses as the controller reports them (m and aim have the fit),
+	// and in fit mode the other tool this hand has hold of
+	rawM, rawAim hmdMatrix34
+	fitOther     *hand
+	fitRel       hmdMatrix34
 }
 
 func (h *hand) down(b uint) bool { return h.pressed&(1<<b) != 0 && h.prev&(1<<b) == 0 }
@@ -151,6 +156,7 @@ type editor struct {
 	hands                        []*hand
 	hmd                          hmdMatrix34
 	cur                          []button
+	toolFitting                  bool // FIT TOOL: the other hand moves this one's tool
 }
 
 var ed = &editor{ghost: true}
