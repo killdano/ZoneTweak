@@ -181,7 +181,7 @@ def cover(W=1600, H=1000):
     fs = ImageFont.truetype(F_MED, 27)
     sy = plate_y1 + 30
     img, _ = clean_text(img, (x0 + 6, sy), "PLAY-SPACE EDITOR FOR PIMAX & STEAMVR", fs, (236, 244, 238, 255), 5, 14)
-    img, _ = clean_text(img, (x0 + 6, sy + 46), "A VR GAME IN YOUR OWN ROOM", fs, AMBER + (255,), 5, 14)
+    img, _ = clean_text(img, (x0 + 6, sy + 46), "BUILD YOUR EMP BEFORE THEY TAKE IT AWAY", fs, AMBER + (255,), 4, 14)
 
     # the tagline along the bottom, split across the seam: edit it on the left, defend it on the right
     fb = ImageFont.truetype(F_BLACK, 44)
