@@ -71,7 +71,7 @@ def cover(W=1600, H=1000):
     a dead generator left. Split on a hazard-striped diagonal; each half carries its own name,
     ZONETWEAK + CONTRABAND reading across the top as one title."""
     zone = Image.new('RGB', (W, H), (0, 0, 0))
-    zone.paste(Image.open('cover_render.png').convert('RGB').resize((W, H), Image.LANCZOS), (-90, 0))
+    zone.paste(Image.open('cover_render.png').convert('RGB').resize((W, H), Image.LANCZOS), (-205, 0))
     gsrc = Image.open('cover_game.png').convert('RGB')
     gsrc = gsrc.resize((int(gsrc.width * H / gsrc.height), H), Image.LANCZOS)
     game = Image.new('RGB', (W, H), (0, 0, 0))
