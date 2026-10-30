@@ -6,7 +6,8 @@ package main
 // from a chosen camera and dumps the draw batches; preview/render.py renders them with the
 // real shaders. Usage:
 //   prevbin "eyeX,eyeY,eyeZ,lookX,lookY,lookZ" seconds
-// Environment: SEED, ROOM ("chap" for the captured boundary, or "w,d" in feet), GENS,
+// Environment: SEED, ROOM ("chap" for the captured boundary, "w,d" in feet, or
+// "pts:x,z;x,z;..." in metres), GENS,
 // MAZE (fraction of points the bot spends on the maze), SCENE (scripted set-ups).
 
 import (
@@ -17,6 +18,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -35,6 +37,19 @@ func previewRoom() []pt2 {
 			}
 		}
 		spec = "10,10"
+	}
+	if strings.HasPrefix(spec, "pts:") {
+		// a boundary of your own, in metres: ROOM=pts:x,z;x,z;...
+		var P []pt2
+		for _, s := range strings.Split(spec[4:], ";") {
+			var x, z float64
+			if n, _ := fmt.Sscanf(s, "%f,%f", &x, &z); n == 2 {
+				P = append(P, pt2{x, z})
+			}
+		}
+		if len(P) >= 3 {
+			return P
+		}
 	}
 	var w, d float64
 	fmt.Sscanf(spec, "%f,%f", &w, &d)
@@ -103,6 +118,13 @@ func main() {
 	view := setCam(eye, look)
 	dt := 1.0 / 45
 	frames := int(secs / dt)
+	blowGen, blowF := -1, -1
+	if v := os.Getenv("BLOW"); v != "" {
+		// BLOW=gen,secs: that generator blown this long before the end of the run
+		var bs float64
+		fmt.Sscanf(v, "%d,%f", &blowGen, &bs)
+		blowF = frames - int(bs/dt)
+	}
 	t0 := time.Now()
 	var tb time.Duration
 	nb := 0
@@ -118,6 +140,12 @@ func main() {
 			fwd := look.sub(eye).norm()
 			G.wallFrom = eye.add(fwd.mul(0.42)).add(fwd.cross(v3(0, 1, 0)).norm().mul(0.16)).add(v3(0, -0.2, 0))
 			G.wallFromT = fxTime()
+		}
+		if blowF >= 0 && f == blowF {
+			// BLOW: that generator drained flat (the wardens leaning on it got it), its walls down
+			if blowGen >= 0 && blowGen < len(G.r.Gens) {
+				G.r.Gens[G.r.Gens[blowGen].Lead].Charge = 0
+			}
 		}
 		G.lampFrame()
 		G.panelFrame(dt)
@@ -277,6 +305,16 @@ func main() {
 		b.Yaw = math.Pi / 2
 		b.Moving = 1
 	}
+	if v := os.Getenv("WARDEN"); v != "" {
+		// a warden put right here, mid-stride towards tx,tz: WARDEN=x,z,tx,tz
+		var x, z, tx, tz float64
+		fmt.Sscanf(v, "%f,%f,%f,%f", &x, &z, &tx, &tz)
+		b := G.r.Spawn(sim.Walker, 0, "")
+		b.Pos, b.State = sim.V(x, z), sim.RWalk
+		b.Path = []sim.V2{sim.V(tx, tz)}
+		b.Yaw = math.Atan2(tz-z, tx-x)
+		b.Moving = 1
+	}
 	if os.Getenv("SUPERWALL") != "" {
 		// every magenta wall supercharged this instant (anything near it gets the blast)
 		G.r.Phase = sim.Playing
@@ -369,6 +407,54 @@ func main() {
 		if v == "menu" {
 			ed.openMenu()
 		}
+		if gv := os.Getenv("GRAB"); gv != "" {
+			// your right hand's tool with its laser on a generator, dragging it: GRAB=post,dx,dz
+			var gi int
+			var dx, dz float64
+			fmt.Sscanf(gv, "%d,%f,%f", &gi, &dx, &dz)
+			fwd := look.sub(eye).norm()
+			right := fwd.cross(v3(0, 1, 0)).norm()
+			up := right.cross(fwd).norm()
+			h := &hand{idx: 1, grab: -1, hoverV: -1, hoverE: -1, btn: -1, valid: true, aimValid: true}
+			ed.hands = []*hand{h}
+			ed.laserHand, ed.laser = h, true
+			toolK = 1
+			palm := eye.add(fwd.mul(0.42)).add(right.mul(0.2)).add(up.mul(-0.26))
+			if pv := os.Getenv("PALMOFF"); pv != "" {
+				// where the controller is relative to your head: forward, right, up
+				var a, b2, c float64
+				fmt.Sscanf(pv, "%f,%f,%f", &a, &b2, &c)
+				palm = eye.add(fwd.mul(a)).add(right.mul(b2)).add(up.mul(c))
+			}
+			if pv := os.Getenv("PALM"); pv != "" {
+				// the controller somewhere else (seen from outside the cage)
+				fmt.Sscanf(pv, "%f,%f,%f", &palm.x, &palm.y, &palm.z)
+			}
+			start := ed.pts[gi]
+			n := 60
+			for k := 0; k <= n; k++ {
+				u := smooth(float64(k) / float64(n))
+				tgt := fl(pt2{start[0] + dx*u, start[1] + dz*u}, 1.1)
+				f := tgt.sub(palm).norm()
+				Z := f.mul(-1)
+				Y := projPerp(v3(0, 1, 0), Z).norm()
+				X := Y.cross(Z).norm()
+				previewSetMat(&h.aim, palm, X, Y, Z)
+				previewSetMat(&h.m, palm.sub(f.mul(0.05)).add(Y.mul(-0.02)), X, Y, Z)
+				h.updateLaser(dt)
+				h.prev = h.pressed
+				h.pressed = 1 << bitTrigger
+				if k == 0 {
+					h.prev = 0
+				}
+				simClock += dt
+				frameDT = dt
+				ed.cur = ed.page.buttons()
+				ed.handleHand(h)
+				ed.buildScene()
+			}
+			fmt.Fprintf(os.Stderr, "grabbed %d: %v, post now %.2f,%.2f\n", h.grab, h.rayGrab, ed.pts[gi][0], ed.pts[gi][1])
+		}
 		zf := 90
 		if v := os.Getenv("ZONESECS"); v != "" {
 			var secs float64
@@ -383,6 +469,9 @@ func main() {
 		}
 		for _, d := range zDrones {
 			fmt.Fprintf(os.Stderr, "drone at %.2f,%.2f,%.2f\n", d.pos[0], d.h, d.pos[1])
+		}
+		for i, p := range ed.pts {
+			fmt.Fprintf(os.Stderr, "post %d at %.2f,%.2f\n", i, p[0], p[1])
 		}
 	} else {
 		G.buildScene()
@@ -416,6 +505,9 @@ func main() {
 			if b.Alive() {
 				fmt.Fprintf(os.Stderr, "robot %d kind %d state %d at %.2f,%.2f\n", b.ID, b.Kind, b.State, b.Pos.X, b.Pos.Z)
 			}
+		}
+		for i, g := range G.r.Gens {
+			fmt.Fprintf(os.Stderr, "gen %d lead %d state %d at %.2f,%.2f charge %.0f\n", i, g.Lead, g.State, g.Pos.X, g.Pos.Z, g.Charge)
 		}
 	}
 	for _, d := range G.r.Doors {
@@ -495,12 +587,23 @@ func previewHands(eye, look vec3) {
 		rp, rf, ru = eye.add(lr.mul(0.55)).add(v3(0, -0.35, 0)), lr, v3(0, 1, 0)
 	case "palmup": // in front, palm up (as if holding something out)
 		rp, rf, ru = eye.add(lvl.mul(0.4)).add(lr.mul(0.15)).add(v3(0, -0.45, 0)), lvl, lr.mul(-1)
+	case "at": // exactly here: HANDAT=x,y,z HANDDIR=fx,fy,fz (where the fingers point)
+		fmt.Sscanf(os.Getenv("HANDAT"), "%f,%f,%f", &rp.x, &rp.y, &rp.z)
+		fmt.Sscanf(os.Getenv("HANDDIR"), "%f,%f,%f", &rf.x, &rf.y, &rf.z)
+		rf = rf.norm()
+		ru = projPerp(v3(0, 1, 0), rf).norm()
 	}
 	set(hs[1], rp, rf, ru)
 	hs[1].trig = 0.45
+	if os.Getenv("POSE") == "at" {
+		hs[1].trig, hs[1].grip = 0, 0.35 // just the glove, fingers a little curled
+	}
 	lp := eye.add(fwd.mul(0.34)).add(right.mul(-0.17)).add(up.mul(-0.24))
 	set(hs[0], lp, fwd.add(right.mul(0.5)).norm(), v3(0, 1, 0).add(right.mul(0.3)))
 	hs[0].grip = 0.3
+	if os.Getenv("NOLEFT") != "" {
+		hs[0].valid, hs[0].aimValid = false, false
+	}
 	for k := 0; k < 3; k++ {
 		G.handFrame(1.0 / 45)
 		G.laserFrame(1.0 / 45)
@@ -556,4 +659,11 @@ func previewDriver(hs []*hand) {
 		frameDT = 1.0 / 45
 		G.deviceFrame(1.0 / 45)
 	}
+}
+
+func previewSetMat(m *hmdMatrix34, pos, X, Y, Z vec3) {
+	for r, a := range [3]vec3{X, Y, Z} {
+		m[0][r], m[1][r], m[2][r] = float32(a.x), float32(a.y), float32(a.z)
+	}
+	m[0][3], m[1][3], m[2][3] = float32(pos.x), float32(pos.y), float32(pos.z)
 }

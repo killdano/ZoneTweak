@@ -65,29 +65,32 @@ def hazard_band(d, a, b, w, phase=0):
 
 
 def cover(W=1600, H=1000):
-    """ZoneTweak, and the game that comes with it: the editor's cell on the left, a round of
-    Contraband on the right, split on a hazard-striped diagonal."""
-    def shifted(path, dx):
-        # each frame slid so its subject sits in its own half (the robots, the cart)
-        src = Image.open(path).convert('RGB').resize((W, H), Image.LANCZOS)
-        out = Image.new('RGB', (W, H), (0, 0, 0))
-        out.paste(src, (int(dx), 0))
-        return out
-    zone = shifted('cover_render.png', -W * 0.3)
-    game = shifted('cover_game.png', W * 0.22)
+    """ZoneTweak, and the game that comes with it. Left: your boundary seen from outside as a
+    loop of laser walls, your tool dragging one of its generators. Right: a round of
+    Contraband - a glove in the device's circuit cards while a warden walks in through the gap
+    a dead generator left. Split on a hazard-striped diagonal; each half carries its own name,
+    ZONETWEAK + CONTRABAND reading across the top as one title."""
+    zone = Image.new('RGB', (W, H), (0, 0, 0))
+    zone.paste(Image.open('cover_render.png').convert('RGB').resize((W, H), Image.LANCZOS), (-90, 0))
+    gsrc = Image.open('cover_game.png').convert('RGB')
+    gsrc = gsrc.resize((int(gsrc.width * H / gsrc.height), H), Image.LANCZOS)
+    game = Image.new('RGB', (W, H), (0, 0, 0))
+    game.paste(gsrc, (880, 0))
     # the game side graded a little warmer and harder, so the two halves read apart
     r, g, b = game.split()
     game = Image.merge('RGB', (r.point(lambda v: min(255, int(v * 1.18 + 6))), g.point(lambda v: int(v * 0.9)), b.point(lambda v: int(v * 0.95))))
-    top, bot = W * 0.645, W * 0.47  # where the seam meets the top and bottom edges
+    top, bot = 880, 1090  # where the seam meets the top and bottom edges
+    seam_x = lambda y: top + (bot - top) * y / H
     m = Image.new('L', (W, H), 0)
     ImageDraw.Draw(m).polygon([(top, 0), (W, 0), (W, H), (bot, H)], fill=255)
     img = Image.composite(game, zone, m.filter(ImageFilter.GaussianBlur(1))).convert('RGBA')
-    # smoke behind the title block (top left) and along the bottom for the tagline
+    # smoke behind the two title blocks and along the bottom for the tagline
     shade = Image.new('L', (W, H), 0)
     sd = ImageDraw.Draw(shade)
-    sd.ellipse([-W * 0.45, -H * 0.8, W * 0.66, H * 0.62], fill=205)
-    sd.rectangle([0, H * 0.86, W, H], fill=200)
-    shade = shade.filter(ImageFilter.GaussianBlur(90))
+    sd.ellipse([-W * 0.3, -H * 0.55, W * 0.6, H * 0.36], fill=215)
+    sd.ellipse([W * 0.52, -H * 0.55, W * 1.3, H * 0.36], fill=215)
+    sd.rectangle([0, H * 0.88, W, H], fill=190)
+    shade = shade.filter(ImageFilter.GaussianBlur(70))
     img = Image.composite(Image.new('RGBA', (W, H), (3, 6, 5, 255)), img, shade)
     vig = Image.new('L', (W, H), 0)
     ImageDraw.Draw(vig).ellipse([-W * 0.25, -H * 0.3, W * 1.25, H * 1.3], fill=255)
@@ -119,11 +122,11 @@ def cover(W=1600, H=1000):
         tracked(ImageDraw.Draw(img), (x, y), text, font, fill, track)
         return img, w
 
-    # ZONETWEAK, grunged, the TWEAK glowing green
+    # ZONETWEAK over its half, grunged, the TWEAK glowing green
     layer = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    ft = ImageFont.truetype(F_BLACK, 116)
-    x0, y0 = 78, 70
+    ft = ImageFont.truetype(F_BLACK, 112)
+    x0, y0 = 70, 54
     x = tracked(d, (x0, y0), "ZONE", ft, (226, 232, 228, 255), 5)
     tracked(d, (x, y0), "TWEAK", ft, GREEN + (255,), 5)
     layer.putalpha(ImageChops.multiply(layer.getchannel('A'), grunge_mask(W, H)))
@@ -131,42 +134,39 @@ def cover(W=1600, H=1000):
     tracked(ImageDraw.Draw(glow), (x, y0), "TWEAK", ft, GREEN + (170,), 5)
     img = Image.alpha_composite(img, glow.filter(ImageFilter.GaussianBlur(16)))
     img = Image.alpha_composite(img, layer)
-    tw = text_width(ImageDraw.Draw(img), "ZONETWEAK", ft, 5)
-    tl, tt, _, tb = ft.getbbox("Z")
+    _, zt, _, zb = ft.getbbox("Z")
+    cap0, cap1 = y0 + zt, y0 + zb  # the title's cap line and baseline
 
-    # "+ CONTRABAND" under it as the rest of the name: the + in the title's own white, the
-    # game's name on a red plate that ends where ZONETWEAK does, its text dead centre on it
-    line2 = y0 + 152
-    plus = ImageFont.truetype(F_BLACK, 104)
+    # "+ CONTRABAND" over the game's half on the same line, the rest of the name: the + in the
+    # title's own white, the game's name on a red plate, its text dead centre on it
+    plus = ImageFont.truetype(F_BLACK, 96)
     pd0 = ImageDraw.Draw(img)
     pl_, pt_, pr_, pb_ = plus.getbbox("+")
     plus_w = pr_ - pl_
-    gap, pad_x, pad_y = 22, 26, 18
-    plate_x0 = x0 + plus_w + gap
-    plate_x1 = x0 + tw
-    # the biggest CONTRABAND that fits the plate
+    gap, pad_x = 18, 22
+    left = seam_x(cap1) + 46  # clear of the hazard band
+    right = W - 56
+    plate_x0, plate_x1 = left + plus_w + gap, right
+    plate_y0, plate_y1 = cap0, cap1  # as tall as ZONETWEAK's capitals
     size = 100
-    while size > 40:
+    while size > 30:
         fc = ImageFont.truetype(F_BLACK, size)
-        if text_width(pd0, "CONTRABAND", fc, 5) <= plate_x1 - plate_x0 - 2 * pad_x:
+        cl_, ct_, _, cb_ = fc.getbbox("CONTRABAND")
+        if text_width(pd0, "CONTRABAND", fc, 5) <= plate_x1 - plate_x0 - 2 * pad_x and cb_ - ct_ <= (plate_y1 - plate_y0) * 0.62:
             break
         size -= 2
     cw = text_width(pd0, "CONTRABAND", fc, 5)
     cl_, ct_, _, cb_ = fc.getbbox("CONTRABAND")
-    ch = cb_ - ct_
-    plate_y0 = line2
-    plate_y1 = line2 + ch + 2 * pad_y
     tx = plate_x0 + (plate_x1 - plate_x0 - cw) / 2 - cl_
-    ty = plate_y0 + pad_y - ct_
+    ty = (plate_y0 + plate_y1) / 2 - (ct_ + cb_) / 2
     pl = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     pd = ImageDraw.Draw(pl)
-    pd.rectangle([plate_x0, plate_y0, plate_x1, plate_y1], fill=(44, 6, 4, 215))
+    pd.rectangle([plate_x0, plate_y0, plate_x1, plate_y1], fill=(44, 6, 4, 220))
     pd.rectangle([plate_x0, plate_y0, plate_x1, plate_y1], outline=RED + (255,), width=3)
     img = Image.alpha_composite(img, pl)
-    # the +, centred on the plate's height, grunged like the title
     pls = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     py = (plate_y0 + plate_y1) / 2 - (pt_ + pb_) / 2
-    ImageDraw.Draw(pls).text((x0 - pl_, py), "+", font=plus, fill=(226, 232, 228, 255))
+    ImageDraw.Draw(pls).text((left - pl_, py), "+", font=plus, fill=(226, 232, 228, 255))
     pls.putalpha(ImageChops.multiply(pls.getchannel('A'), grunge_mask(W, H)))
     img = Image.alpha_composite(img, pls)
     cg = Image.new('RGBA', (W, H), (0, 0, 0, 0))
@@ -177,19 +177,28 @@ def cover(W=1600, H=1000):
     cl.putalpha(ImageChops.multiply(cl.getchannel('A'), grunge_mask(W, H)))
     img = Image.alpha_composite(img, cl)
 
-    # what they are
-    fs = ImageFont.truetype(F_MED, 27)
-    sy = plate_y1 + 30
-    img, _ = clean_text(img, (x0 + 6, sy), "PLAY-SPACE EDITOR FOR PIMAX & STEAMVR", fs, (236, 244, 238, 255), 5, 14)
-    img, _ = clean_text(img, (x0 + 6, sy + 46), "BUILD YOUR EMP BEFORE THEY TAKE IT AWAY", fs, AMBER + (255,), 4, 14)
+    # what each one is, under its own name
+    sy = cap1 + 30
+    fs = ImageFont.truetype(F_MED, 26)
+    img, _ = clean_text(img, (x0 + 6, sy), "PLAY-SPACE EDITOR FOR PIMAX & STEAMVR", fs, (236, 244, 238, 255), 4, 14)
+    sub = "BUILD YOUR EMP BEFORE THEY TAKE IT AWAY"
+    fsz = 26
+    while fsz > 16:
+        fa = ImageFont.truetype(F_MED, fsz)
+        if text_width(ImageDraw.Draw(img), sub, fa, 3) <= right - (seam_x(sy + 30) + 46):
+            break
+        fsz -= 1
+    sw = text_width(ImageDraw.Draw(img), sub, fa, 3)
+    img, _ = clean_text(img, (right - sw, sy + 2), sub, fa, AMBER + (255,), 3, 14)
 
     # the tagline along the bottom, split across the seam: edit it on the left, defend it on the right
-    fb = ImageFont.truetype(F_BLACK, 44)
-    by = H - 92
+    fb = ImageFont.truetype(F_BLACK, 42)
+    by = H - 86
     img, _ = clean_text(img, (x0 + 6, by), "TWEAK YOUR ZONE.", fb, (236, 244, 238, 255), 4, glow=GREEN + (120,))
     dd = ImageDraw.Draw(img)
-    tw = text_width(dd, "THEN DEFEND IT.", fb, 4)
-    img, _ = clean_text(img, (W - 78 - tw, by), "THEN DEFEND IT.", fb, (255, 214, 200, 255), 4, glow=RED + (150,))
+    tw2 = text_width(dd, "THEN DEFEND IT.", fb, 4)
+    img, _ = clean_text(img, (right - tw2, by), "THEN DEFEND IT.", fb, (255, 214, 200, 255), 4, glow=RED + (150,))
+    print("contraband %dpx, sub %dpx, defend starts %d (seam %d)" % (size, fsz, right - tw2, seam_x(by)))
     g = noise_tex(W, H, 1, 11).point(lambda v: int((v - 128) * 0.06 + 128))
     img = Image.blend(img.convert('RGB'), ImageChops.add(img.convert('RGB'), Image.merge('RGB', [g, g, g]), 1, -128), 0.5)
     return img
